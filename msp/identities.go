@@ -122,6 +122,7 @@ func (o OUIDs) String() string {
 
 // GetOrganizationalUnits returns the OU for this instance
 func (id *identity) GetOrganizationalUnits() []*OUIdentifier {
+	fmt.Println("GetOrganizationalUnits", id.cert == nil)
 	if id.cert == nil {
 		return nil
 	}
@@ -205,6 +206,7 @@ func (id *identity) Serialize() ([]byte, error) {
 	if pemBytes == nil {
 		return nil, errors.New("encoding of identity failed")
 	}
+	fmt.Println("(id *identity) Serialize()", string(pemBytes))
 
 	// We serialize identities by prepending the MSPID and appending the ASN.1 DER content of the cert
 	sId := &msp.SerializedIdentity{Mspid: id.id.Mspid, IdBytes: pemBytes}

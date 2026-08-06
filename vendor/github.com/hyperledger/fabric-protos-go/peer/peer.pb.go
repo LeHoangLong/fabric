@@ -6,11 +6,12 @@ package peer
 import (
 	context "context"
 	fmt "fmt"
+	math "math"
+
 	proto "github.com/golang/protobuf/proto"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
-	math "math"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -67,6 +68,7 @@ func NewEndorserClient(cc *grpc.ClientConn) EndorserClient {
 
 func (c *endorserClient) ProcessProposal(ctx context.Context, in *SignedProposal, opts ...grpc.CallOption) (*ProposalResponse, error) {
 	out := new(ProposalResponse)
+	fmt.Println("c.cc.Target()", c.cc.Target())
 	err := c.cc.Invoke(ctx, "/protos.Endorser/ProcessProposal", in, out, opts...)
 	if err != nil {
 		return nil, err

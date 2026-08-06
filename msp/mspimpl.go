@@ -8,11 +8,15 @@ package msp
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/pem"
+	"fmt"
+	"os"
 	"strings"
 
 	"github.com/golang/protobuf/proto"
@@ -115,6 +119,7 @@ func newBccspMsp(version MSPVersion, defaultBCCSP bccsp.BCCSP) (MSP, error) {
 	theMsp := &bccspmsp{}
 	theMsp.version = version
 	theMsp.bccsp = defaultBCCSP
+
 	switch version {
 	case MSPv1_0:
 		theMsp.internalSetupFunc = theMsp.setupV1
@@ -366,7 +371,7 @@ func (msp *bccspmsp) hasOURoleInternal(id *identity, mspRole m.MSPRole_MSPRoleTy
 	}
 
 	for _, OU := range id.GetOrganizationalUnits() {
-		if OU.OrganizationalUnitIdentifier == nodeOU.OrganizationalUnitIdentifier {
+		if certifiersIdentifierMatch(msp, nodeOU, OU.CertifiersIdentifier) {
 			return nil
 		}
 	}
@@ -377,6 +382,7 @@ func (msp *bccspmsp) hasOURoleInternal(id *identity, mspRole m.MSPRole_MSPRoleTy
 // DeserializeIdentity returns an Identity given the byte-level
 // representation of a SerializedIdentity struct
 func (msp *bccspmsp) DeserializeIdentity(serializedID []byte) (Identity, error) {
+	fmt.Println("func (msp *bccspmsp) DeserializeIdentity(serializedID []byte) (Identity, error)")
 	mspLogger.Debug("Obtaining identity")
 
 	// We first deserialize to a SerializedIdentity to get the MSP ID
@@ -395,13 +401,16 @@ func (msp *bccspmsp) DeserializeIdentity(serializedID []byte) (Identity, error) 
 
 // deserializeIdentityInternal returns an identity given its byte-level representation
 func (msp *bccspmsp) deserializeIdentityInternal(serializedIdentity []byte) (Identity, error) {
+	fmt.Println("deserializeIdentityInternal")
 	// This MSP will always deserialize certs this way
 	bl, _ := pem.Decode(serializedIdentity)
 	if bl == nil {
+		fmt.Println("could not decode the PEM structure")
 		return nil, errors.New("could not decode the PEM structure")
 	}
 	cert, err := x509.ParseCertificate(bl.Bytes)
 	if err != nil {
+		fmt.Println("x509.ParseCertificate failed", err)
 		return nil, errors.Wrap(err, "parseCertificate failed")
 	}
 
@@ -414,9 +423,11 @@ func (msp *bccspmsp) deserializeIdentityInternal(serializedIdentity []byte) (Ide
 
 	pub, err := msp.bccsp.KeyImport(cert, &bccsp.X509PublicKeyImportOpts{Temporary: true})
 	if err != nil {
+		fmt.Println("msp.bccsp.KeyImport failed", err)
 		return nil, errors.WithMessage(err, "failed to import certificate's public key")
 	}
 
+	fmt.Println("newIdentity")
 	return newIdentity(cert, pub, msp)
 }
 
@@ -488,7 +499,15 @@ func (msp *bccspmsp) satisfiesPrincipalInternalPreV13(id Identity, principal *m.
 		// at first, we check whether the MSP
 		// identifier is the same as that of the identity
 		if mspRole.MspIdentifier != msp.name {
-			return errors.Errorf("the identity is a member of a different MSP (expected %s, got %s)", mspRole.MspIdentifier, id.GetMSPIdentifier())
+			certChain, err := msp.getCertificationChain(id)
+			if err != nil {
+				return errors.Wrap(err, "could not get certification chain")
+			}
+			envKey := fmt.Sprintf("%s_ADDITIONAL_PRINCIPAL_CERTIFICATE_HASH_FOR_ROLE_%s", strings.ToUpper(mspRole.MspIdentifier), strings.ToUpper(mspRole.Role.String()))
+			if !msp.isInMspIdentifierWhitelist(envKey, certChain) {
+				fmt.Println("satisfiesPrincipalInternalPreV13")
+				return errors.Errorf("the identity is a member of a different MSP (expected %s, got %s)", mspRole.MspIdentifier, id.GetMSPIdentifier())
+			}
 		}
 
 		// now we validate the different msp roles
@@ -545,7 +564,15 @@ func (msp *bccspmsp) satisfiesPrincipalInternalPreV13(id Identity, principal *m.
 		// at first, we check whether the MSP
 		// identifier is the same as that of the identity
 		if OU.MspIdentifier != msp.name {
-			return errors.Errorf("the identity is a member of a different MSP (expected %s, got %s)", OU.MspIdentifier, id.GetMSPIdentifier())
+			certChain, err := msp.getCertificationChain(id)
+			if err != nil {
+				return errors.Wrap(err, "could not get certification chain")
+			}
+			envKey := fmt.Sprintf("%s_ADDITIONAL_PRINCIPAL_CERTIFICATE_HASH_FOR_OU_%s", strings.ToUpper(OU.MspIdentifier))
+			if !msp.isInMspIdentifierWhitelist(envKey, certChain) {
+				fmt.Println("satisfiesPrincipalInternalPreV13 2")
+				return errors.Errorf("the identity is a member of a different MSP (expected %s, got %s)", OU.MspIdentifier, id.GetMSPIdentifier())
+			}
 		}
 
 		// we then check if the identity is valid with this MSP
@@ -622,10 +649,23 @@ func (msp *bccspmsp) satisfiesPrincipalInternalV142(id Identity, principal *m.MS
 			return errors.Wrap(err, "could not unmarshal MSPRole from principal")
 		}
 
+		certChain, err := msp.getCertificationChain(id)
+		if err != nil {
+			return errors.Wrap(err, "could not unmarshal MSPRole from principal")
+		}
+
+		envKey := fmt.Sprintf("%s_ADDITIONAL_PRINCIPAL_CERTIFICATE_HASH_FOR_ROLE_%s", strings.ToUpper(mspRole.MspIdentifier), strings.ToUpper(mspRole.Role.String()))
+
+		for _, cert := range certChain {
+			fmt.Println("cert.Subject", cert.Subject.CommonName)
+		}
 		// at first, we check whether the MSP
 		// identifier is the same as that of the identity
 		if mspRole.MspIdentifier != msp.name {
-			return errors.Errorf("the identity is a member of a different MSP (expected %s, got %s)", mspRole.MspIdentifier, id.GetMSPIdentifier())
+			if !msp.isInMspIdentifierWhitelist(envKey, certChain) {
+				fmt.Println("satisfiesPrincipalInternalV142")
+				return errors.Errorf("the identity is a member of a different MSP (expected %s, got %s)", mspRole.MspIdentifier, id.GetMSPIdentifier())
+			}
 		}
 
 		// now we validate the admin role only, the other roles are left to the v1.3 function
@@ -678,9 +718,34 @@ func (msp *bccspmsp) isInAdmins(id *identity) bool {
 	return false
 }
 
+func (msp *bccspmsp) isInMspIdentifierWhitelist(envKey string, certChain []*x509.Certificate) bool {
+	fmt.Println("isInMspIdentifierWhitelist", len(certChain), envKey, os.Getenv(envKey))
+	if len(certChain) == 0 {
+		return false
+	}
+	certHash := sha256.Sum256(certChain[0].Raw)
+	certHashB64 := base64.StdEncoding.EncodeToString(certHash[:])
+
+	envWhitelist := os.Getenv(envKey)
+	fmt.Println("certHashB64", certHashB64, envWhitelist)
+
+	if envWhitelist == "" {
+		return false
+	}
+
+	for _, v := range strings.Split(envWhitelist, ",") {
+		v = strings.TrimSpace(v)
+		if v != "" && v == certHashB64 {
+			return true
+		}
+	}
+	return false
+}
+
 // getCertificationChain returns the certification chain of the passed identity within this msp
 func (msp *bccspmsp) getCertificationChain(id Identity) ([]*x509.Certificate, error) {
-	mspLogger.Debugf("MSP %s getting certification chain", msp.name)
+	fmt.Println("MSP getting certification chain")
+	mspLogger.Warningf("MSP %s getting certification chain", msp.name)
 
 	switch id := id.(type) {
 	// If this identity is of this specific type,
@@ -718,9 +783,26 @@ func (msp *bccspmsp) getUniqueValidationChain(cert *x509.Certificate, opts x509.
 	if msp.opts == nil {
 		return nil, errors.New("the supplied identity has no verify options")
 	}
+
 	validationChains, err := cert.Verify(opts)
 	if err != nil {
-		return nil, errors.WithMessage(err, "the supplied identity is not valid")
+		systemRoots, err := x509.SystemCertPool()
+		if err != nil {
+			return nil, errors.WithMessage(err, "failed to get system cert pool")
+		}
+
+		mspLogger.Infof("System certificate pool has %d certificates:", len(systemRoots.Subjects()))
+		for i, subject := range systemRoots.Subjects() {
+			mspLogger.Infof("  [%d] %s", i, string(subject))
+		}
+
+		opts.Roots = nil
+
+		validationChains, err = cert.Verify(opts)
+
+		if err != nil {
+			return nil, errors.WithMessage(err, "the supplied identity is not valid")
+		}
 	}
 
 	// we only support a single validation chain;
@@ -752,6 +834,7 @@ var (
 // host name, the validation would fail with an x509.CertificateInvalidError
 // and a rason of x509.NameConstraintsWithoutSANs.
 func verifyLegacyNameConstraints(chain []*x509.Certificate) error {
+	fmt.Println("verifyLegacyNameConstraints")
 	if len(chain) < 2 {
 		return nil
 	}
@@ -864,10 +947,18 @@ func (msp *bccspmsp) getCertificationChainIdentifier(id Identity) ([]byte, error
 
 	// chain[0] is the certificate representing the identity.
 	// It will be discarded
-	return msp.getCertificationChainIdentifierFromChain(chain[1:])
+	ret, err := msp.getCertificationChainIdentifierFromChain(chain[1:])
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Println("getCertificationChainIdentifier ret", base64.StdEncoding.EncodeToString(ret))
+
+	return ret, nil
 }
 
 func (msp *bccspmsp) getCertificationChainIdentifierFromChain(chain []*x509.Certificate) ([]byte, error) {
+	fmt.Println("getCertificationChainIdentifierFromChain", msp.cryptoConfig.IdentityIdentifierHashFunction, len(chain))
 	// Hash the chain
 	// Use the hash of the identity's certificate as id in the IdentityIdentifier
 	hashOpt, err := bccsp.GetHashOpt(msp.cryptoConfig.IdentityIdentifierHashFunction)
@@ -880,6 +971,7 @@ func (msp *bccspmsp) getCertificationChainIdentifierFromChain(chain []*x509.Cert
 		return nil, errors.WithMessage(err, "failed getting hash function when computing certification chain identifier")
 	}
 	for i := 0; i < len(chain); i++ {
+		fmt.Println("getCertificationChainIdentifierFromChain ret", base64.StdEncoding.EncodeToString(chain[i].Raw))
 		hf.Write(chain[i].Raw)
 	}
 	return hf.Sum(nil), nil
@@ -897,6 +989,7 @@ func (msp *bccspmsp) sanitizeCert(cert *x509.Certificate) (*x509.Certificate, er
 			// this is a root CA we can already sanitize it
 			cert, err = sanitizeECDSASignedCert(cert, cert)
 			if err != nil {
+				fmt.Println("1")
 				return nil, err
 			}
 			isRootCACert = true
@@ -908,6 +1001,7 @@ func (msp *bccspmsp) sanitizeCert(cert *x509.Certificate) (*x509.Certificate, er
 		// we will validate already sanitized cert
 		chain, err := msp.getUniqueValidationChain(cert, validityOpts)
 		if err != nil {
+			fmt.Println("2")
 			return nil, err
 		}
 
@@ -915,6 +1009,7 @@ func (msp *bccspmsp) sanitizeCert(cert *x509.Certificate) (*x509.Certificate, er
 		// sanitized certificate, there is no need to
 		// sanitize it once again hence we can just return it
 		if isRootCACert {
+			fmt.Println("3")
 			return cert, nil
 		}
 
@@ -926,6 +1021,7 @@ func (msp *bccspmsp) sanitizeCert(cert *x509.Certificate) (*x509.Certificate, er
 		// Sanitize
 		return sanitizeECDSASignedCert(cert, parentCert)
 	}
+	fmt.Println("4")
 	return cert, nil
 }
 

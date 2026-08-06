@@ -303,6 +303,7 @@ func (e *Endorser) preProcess(up *UnpackedProposal, channel *Channel) error {
 // clients are expected to look at the ProposalResponse response status code (e.g. 500) and message.
 func (e *Endorser) ProcessProposal(ctx context.Context, signedProp *pb.SignedProposal) (*pb.ProposalResponse, error) {
 	// start time for computing elapsed time metric for successfully endorsed proposals
+	endorserLogger.Warningf("ProcessProposal")
 	startTime := time.Now()
 	e.Metrics.ProposalsReceived.Add(1)
 
@@ -456,7 +457,7 @@ func (e *Endorser) ProcessProposalSuccessfullyOrError(up *UnpackedProposal) (*pb
 
 	escc := cdLedger.EndorsementPlugin
 
-	logger.Debugf("escc for chaincode %s is %s", up.ChaincodeName, escc)
+	logger.Warningf("escc for chaincode %s is %s", up.ChaincodeName, escc)
 
 	// Note, mPrpBytes is the same as prpBytes by default endorsement plugin, but others could change it.
 	endorsement, mPrpBytes, err := e.Support.EndorseWithPlugin(escc, up.ChannelID(), prpBytes, up.SignedProposal)
@@ -466,6 +467,7 @@ func (e *Endorser) ProcessProposalSuccessfullyOrError(up *UnpackedProposal) (*pb
 		return nil, errors.WithMessage(err, "endorsing with plugin failed")
 	}
 
+	logger.Warningf("done escc for chaincode %s is %s", up.ChaincodeName, escc)
 	return &pb.ProposalResponse{
 		Version:     1,
 		Endorsement: endorsement,

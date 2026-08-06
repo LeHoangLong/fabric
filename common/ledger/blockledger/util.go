@@ -7,6 +7,8 @@ SPDX-License-Identifier: Apache-2.0
 package blockledger
 
 import (
+	"fmt"
+
 	"github.com/golang/protobuf/proto"
 	cb "github.com/hyperledger/fabric-protos-go/common"
 	ab "github.com/hyperledger/fabric-protos-go/orderer"
@@ -29,6 +31,7 @@ type NotFoundErrorIterator struct{}
 
 // Next returns nil, cb.Status_NOT_FOUND
 func (nfei *NotFoundErrorIterator) Next() (*cb.Block, cb.Status) {
+	fmt.Println("Next")
 	return nil, cb.Status_NOT_FOUND
 }
 

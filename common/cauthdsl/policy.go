@@ -8,6 +8,8 @@ package cauthdsl
 
 import (
 	"fmt"
+	"reflect"
+	"runtime"
 
 	"github.com/golang/protobuf/proto"
 	cb "github.com/hyperledger/fabric-protos-go/common"
@@ -100,6 +102,7 @@ func (p *policy) EvaluateIdentities(identities []msp.Identity) error {
 		return fmt.Errorf("No such policy")
 	}
 
+	fmt.Println("p.evaluator", reflect.ValueOf(p.evaluator).Type(), runtime.FuncForPC(reflect.ValueOf(p.evaluator).Pointer()).Name())
 	ok := p.evaluator(identities, make([]bool, len(identities)))
 	if !ok {
 		return errors.New("signature set did not satisfy policy")

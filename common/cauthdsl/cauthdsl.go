@@ -8,6 +8,7 @@ package cauthdsl
 
 import (
 	"fmt"
+	"runtime/debug"
 	"time"
 
 	cb "github.com/hyperledger/fabric-protos-go/common"
@@ -42,18 +43,22 @@ func compile(policy *cb.SignaturePolicy, identities []*mb.MSPPrincipal) (func([]
 			cauthdslLogger.Debugf("%p gate %d evaluation starts", signedData, grepKey)
 			verified := int32(0)
 			_used := make([]bool, len(used))
-			for _, policy := range policies {
+			for i, policy := range policies {
 				copy(_used, used)
-				if policy(signedData, _used) {
+				passed := policy(signedData, _used)
+				if passed {
 					verified++
 					copy(used, _used)
 				}
+				cauthdslLogger.Info("verified instance ", i, verified, passed)
 			}
 
+			cauthdslLogger.Info("verified", verified, t.NOutOf.N)
+
 			if verified >= t.NOutOf.N {
-				cauthdslLogger.Debugf("%p gate %d evaluation succeeds", signedData, grepKey)
+				cauthdslLogger.Infof("%p gate %d evaluation succeeds", signedData, grepKey)
 			} else {
-				cauthdslLogger.Debugf("%p gate %d evaluation fails", signedData, grepKey)
+				cauthdslLogger.Infof("%p gate %d evaluation fails\n%s", signedData, grepKey, debug.Stack())
 			}
 
 			return verified >= t.NOutOf.N
@@ -62,28 +67,29 @@ func compile(policy *cb.SignaturePolicy, identities []*mb.MSPPrincipal) (func([]
 		if t.SignedBy < 0 || t.SignedBy >= int32(len(identities)) {
 			return nil, fmt.Errorf("identity index out of range, requested %v, but identities length is %d", t.SignedBy, len(identities))
 		}
+
 		signedByID := identities[t.SignedBy]
 		return func(signedData []msp.Identity, used []bool) bool {
-			cauthdslLogger.Debugf("%p signed by %d principal evaluation starts (used %v)", signedData, t.SignedBy, used)
+			cauthdslLogger.Warningf("%p signed by %d principal evaluation starts (used %v)", signedData, t.SignedBy, used)
 			for i, sd := range signedData {
 				if used[i] {
-					cauthdslLogger.Debugf("%p skipping identity %d because it has already been used", signedData, i)
+					cauthdslLogger.Warningf("%p skipping identity %d because it has already been used", signedData, i)
 					continue
 				}
 				if cauthdslLogger.IsEnabledFor(zapcore.DebugLevel) {
 					// Unlike most places, this is a huge print statement, and worth checking log level before create garbage
-					cauthdslLogger.Debugf("%p processing identity %d - %v", signedData, i, sd.GetIdentifier())
+					cauthdslLogger.Warningf("%p processing identity %d - %v", signedData, i, sd.GetIdentifier())
 				}
 				err := sd.SatisfiesPrincipal(signedByID)
 				if err != nil {
-					cauthdslLogger.Debugf("%p identity %d does not satisfy principal: %s", signedData, i, err)
+					cauthdslLogger.Warningf("%p identity %d does not satisfy principal: %s", signedData, i, err)
 					continue
 				}
-				cauthdslLogger.Debugf("%p principal evaluation succeeds for identity %d", signedData, i)
+				cauthdslLogger.Warningf("%p principal evaluation succeeds for identity %d", signedData, i)
 				used[i] = true
 				return true
 			}
-			cauthdslLogger.Debugf("%p principal evaluation fails", signedData)
+			cauthdslLogger.Warningf("%p principal evaluation fails\n", signedData)
 			return false
 		}, nil
 	default:

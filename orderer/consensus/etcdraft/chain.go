@@ -8,6 +8,7 @@ package etcdraft
 
 import (
 	"context"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"sync"
@@ -934,7 +935,6 @@ func (c *Chain) ordered(msg *orderer.SubmitRequest) (batches [][]*common.Envelop
 		}
 
 		if c.checkForEvictionNCertRotation(msg.Payload) {
-
 			if !atomic.CompareAndSwapUint32(&c.leadershipTransferInProgress, 0, 1) {
 				c.logger.Warnf("A reconfiguration transaction is already in progress, ignoring a subsequent transaction")
 				return
@@ -944,22 +944,31 @@ func (c *Chain) ordered(msg *orderer.SubmitRequest) (batches [][]*common.Envelop
 				defer atomic.StoreUint32(&c.leadershipTransferInProgress, 0)
 
 				for attempt := 1; attempt <= AbdicationMaxAttempts; attempt++ {
-					if err := c.Node.abdicateLeadership(); err != nil {
-						// If there is no leader, abort and do not retry.
-						// Return early to prevent re-submission of the transaction
-						if err == ErrNoLeader || err == ErrChainHalting {
-							return
-						}
-
-						// If the error isn't any of the below, it's a programming error, so panic.
-						if err != ErrNoAvailableLeaderCandidate && err != ErrTimedOutLeaderTransfer {
-							c.logger.Panicf("Programming error, abdicateLeader() returned with an unexpected error: %v", err)
-						}
-
-						// Else, it's one of the errors above, so we retry.
-						continue
+					submit := false
+					if len(c.Node.Status().Progress) == 1 {
+						submit = true
 					} else {
-						// Else, abdication succeeded, so we submit the transaction (which forwards to the leader)
+						if err := c.Node.abdicateLeadership(); err != nil {
+							// If there is no leader, abort and do not retry.
+							// Return early to prevent re-submission of the transaction
+							if err == ErrNoLeader || err == ErrChainHalting {
+								return
+							}
+
+							// If the error isn't any of the below, it's a programming error, so panic.
+							if err != ErrNoAvailableLeaderCandidate && err != ErrTimedOutLeaderTransfer {
+								c.logger.Panicf("Programming error, abdicateLeader() returned with an unexpected error: %v", err)
+							}
+
+							// Else, it's one of the errors above, so we retry.
+							continue
+						} else {
+							submit = true
+							// Else, abdication succeeded, so we submit the transaction (which forwards to the leader)
+						}
+					}
+
+					if submit {
 						if err := c.Submit(msg, 0); err != nil {
 							c.logger.Warnf("Reconfiguration transaction forwarding failed with error: %v", err)
 						}
@@ -995,7 +1004,7 @@ func (c *Chain) ordered(msg *orderer.SubmitRequest) (batches [][]*common.Envelop
 func (c *Chain) propose(ch chan<- *common.Block, bc *blockCreator, batches ...[]*common.Envelope) {
 	for _, batch := range batches {
 		b := bc.createNextBlock(batch)
-		c.logger.Infof("Created block [%d], there are %d blocks in flight", b.Header.Number, c.blockInflight)
+		c.logger.Warningf("Created block [%d], there are %d blocks in flight", b.Header.Number, c.blockInflight)
 
 		select {
 		case ch <- b:
@@ -1558,9 +1567,13 @@ func (c *Chain) checkForEvictionNCertRotation(env *common.Envelope) bool {
 		return false
 	}
 
+	membershipUpdatesJson, _ := json.Marshal(membershipUpdates)
+	fmt.Println("membershipUpdatesJson", string(membershipUpdatesJson), c.raftID)
 	if membershipUpdates.RotatedNode == c.raftID {
-		c.logger.Infof("Detected certificate rotation of our node")
-		return true
+		if _, found := membershipUpdates.NewConsenters[c.raftID]; !found {
+			c.logger.Infof("Detected certificate rotation of our node")
+			return true
+		}
 	}
 
 	if _, exists := membershipUpdates.NewConsenters[c.raftID]; !exists {

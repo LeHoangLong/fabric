@@ -9,6 +9,7 @@ package etcdraft
 import (
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -461,6 +462,7 @@ func ConfChange(blockMetadata *etcdraft.BlockMetadata, confState *raftpb.ConfSta
 func CreateConsentersMap(blockMetadata *etcdraft.BlockMetadata, configMetadata *etcdraft.ConfigMetadata) map[uint64]*etcdraft.Consenter {
 	consenters := map[uint64]*etcdraft.Consenter{}
 	for i, consenter := range configMetadata.Consenters {
+		fmt.Println("blockMetadata.ConsenterIds[i]", blockMetadata.ConsenterIds[i])
 		consenters[blockMetadata.ConsenterIds[i]] = consenter
 	}
 	return consenters

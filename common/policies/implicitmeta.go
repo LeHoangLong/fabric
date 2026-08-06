@@ -9,6 +9,7 @@ package policies
 import (
 	"bytes"
 	"fmt"
+	"reflect"
 
 	"github.com/golang/protobuf/proto"
 	cb "github.com/hyperledger/fabric-protos-go/common"
@@ -99,6 +100,8 @@ func (imp *ImplicitMetaPolicy) EvaluateSignedData(signatureSet []*protoutil.Sign
 	if remaining == 0 {
 		return nil
 	}
+
+	fmt.Println("EvaluateSignedData", len(imp.SubPolicies), imp.SubPolicies, reflect.ValueOf(imp.SubPolicies[0]).Type(), reflect.ValueOf(imp.SubPolicies[0]).Type().Name())
 	return fmt.Errorf("implicit policy evaluation failed - %d sub-policies were satisfied, but this policy requires %d of the '%s' sub-policies to be satisfied", (imp.Threshold - remaining), imp.Threshold, imp.SubPolicyName)
 }
 
@@ -140,5 +143,7 @@ func (imp *ImplicitMetaPolicy) EvaluateIdentities(identities []msp.Identity) err
 	if remaining == 0 {
 		return nil
 	}
+
+	fmt.Println("EvaluateIdentities")
 	return fmt.Errorf("implicit policy evaluation failed - %d sub-policies were satisfied, but this policy requires %d of the '%s' sub-policies to be satisfied", (imp.Threshold - remaining), imp.Threshold, imp.SubPolicyName)
 }

@@ -7,6 +7,8 @@ SPDX-License-Identifier: Apache-2.0
 package common
 
 import (
+	"fmt"
+
 	cb "github.com/hyperledger/fabric-protos-go/common"
 	ab "github.com/hyperledger/fabric-protos-go/orderer"
 	pb "github.com/hyperledger/fabric-protos-go/peer"
@@ -56,6 +58,8 @@ func (d *DeliverClient) seekSpecified(blockNumber uint64) error {
 
 func (d *DeliverClient) seekOldest() error {
 	env := seekHelper(d.ChannelID, seekOldest, d.TLSCertHash, d.Signer, d.BestEffort)
+	fmt.Println("d.BestEffort", d.BestEffort)
+
 	return d.Service.Send(env)
 }
 
@@ -90,6 +94,7 @@ func (d *DeliverClient) readBlock() (*cb.Block, error) {
 // GetSpecifiedBlock gets the specified block from a peer/orderer's deliver
 // service
 func (d *DeliverClient) GetSpecifiedBlock(num uint64) (*cb.Block, error) {
+	fmt.Println("GetSpecifiedBlock")
 	err := d.seekSpecified(num)
 	if err != nil {
 		return nil, errors.WithMessage(err, "error getting specified block")
@@ -100,6 +105,7 @@ func (d *DeliverClient) GetSpecifiedBlock(num uint64) (*cb.Block, error) {
 
 // GetOldestBlock gets the oldest block from a peer/orderer's deliver service
 func (d *DeliverClient) GetOldestBlock() (*cb.Block, error) {
+	fmt.Println("GetOldestBlock")
 	err := d.seekOldest()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error getting oldest block")
@@ -110,11 +116,15 @@ func (d *DeliverClient) GetOldestBlock() (*cb.Block, error) {
 
 // GetNewestBlock gets the newest block from a peer/orderer's deliver service
 func (d *DeliverClient) GetNewestBlock() (*cb.Block, error) {
+	fmt.Println("GetNewestBlock")
+
 	err := d.seekNewest()
 	if err != nil {
+		fmt.Println("seekNewest err", err)
 		return nil, errors.WithMessage(err, "error getting newest block")
 	}
 
+	fmt.Println("seekNewest ok")
 	return d.readBlock()
 }
 

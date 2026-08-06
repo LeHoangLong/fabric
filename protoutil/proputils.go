@@ -8,7 +8,9 @@ package protoutil
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -356,6 +358,8 @@ func createProposalFromCDS(channelID string, msg proto.Message, creator []byte, 
 // over the concatenation of nonce and creator.
 func ComputeTxID(nonce, creator []byte) string {
 	// TODO: Get the Hash function to be used from
+
+	fmt.Println("ComputeTxID", base64.StdEncoding.EncodeToString(creator))
 	// channel configuration
 	hasher := sha256.New()
 	hasher.Write(nonce)

@@ -8,6 +8,7 @@ package deliver
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"math"
 	"strconv"
@@ -204,6 +205,7 @@ func (h *Handler) deliverBlocks(ctx context.Context, srv *Server, envelope *cb.E
 	}
 
 	chain := h.ChainManager.GetChain(chdr.ChannelId)
+	fmt.Println("chdr.TxId", chdr.TxId, chdr.ChannelId)
 	if chain == nil {
 		// Note, we log this at DEBUG because SDKs will poll waiting for channels to be created
 		// So we would expect our log to be somewhat flooded with these
@@ -257,7 +259,7 @@ func (h *Handler) deliverBlocks(ctx context.Context, srv *Server, envelope *cb.E
 		return cb.Status_BAD_REQUEST, nil
 	}
 
-	logger.Debugf("[channel: %s] Received seekInfo (%p) %v from %s", chdr.ChannelId, seekInfo, seekInfo, addr)
+	logger.Infof("[channel: %s] Received seekInfo (%p) %v from %s", chdr.ChannelId, seekInfo, seekInfo, addr)
 
 	cursor, number := chain.Reader().Iterator(seekInfo.Start)
 	defer cursor.Close()
@@ -287,6 +289,8 @@ func (h *Handler) deliverBlocks(ctx context.Context, srv *Server, envelope *cb.E
 		if seekInfo.Behavior == ab.SeekInfo_FAIL_IF_NOT_READY {
 			if number > chain.Reader().Height()-1 {
 				logger.Warningf("[channel: %s] Block %d not found, block number greater than chain length bounds", chdr.ChannelId, number)
+
+				fmt.Println("seekInfo.Behavior", seekInfo.Behavior)
 				return cb.Status_NOT_FOUND, nil
 			}
 		}
@@ -326,7 +330,7 @@ func (h *Handler) deliverBlocks(ctx context.Context, srv *Server, envelope *cb.E
 			return cb.Status_FORBIDDEN, nil
 		}
 
-		logger.Debugf("[channel: %s] Delivering block [%d] for (%p) for %s", chdr.ChannelId, block.Header.Number, seekInfo, addr)
+		logger.Infof("[channel: %s] Delivering block [%d] for (%p) for %s", chdr.ChannelId, block.Header.Number, seekInfo, addr)
 
 		signedData := &protoutil.SignedData{Data: envelope.Payload, Identity: shdr.Creator, Signature: envelope.Signature}
 		if err := srv.SendBlockResponse(block, chdr.ChannelId, chain, signedData); err != nil {

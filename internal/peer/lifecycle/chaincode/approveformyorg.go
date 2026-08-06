@@ -9,6 +9,9 @@ package chaincode
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
+	"reflect"
+	"runtime/debug"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -162,19 +165,24 @@ func (a *ApproverForMyOrg) Approve() error {
 		a.Command.SilenceUsage = true
 	}
 
+	fmt.Println("createProposal done", string(debug.Stack()), a.Input.TxID)
 	proposal, txID, err := a.createProposal(a.Input.TxID)
 	if err != nil {
 		return errors.WithMessage(err, "failed to create proposal")
 	}
 
+	fmt.Println("signProposal", txID)
 	signedProposal, err := signProposal(proposal, a.Signer)
+	fmt.Println("signProposal done")
 	if err != nil {
 		return errors.WithMessage(err, "failed to create signed proposal")
 	}
 
 	var responses []*pb.ProposalResponse
 	for _, endorser := range a.EndorserClients {
+		fmt.Println("endorser.ProcessProposal before")
 		proposalResponse, err := endorser.ProcessProposal(context.Background(), signedProposal)
+		fmt.Println("endorser.ProcessProposal after", reflect.ValueOf(endorser).Type(), err)
 		if err != nil {
 			return errors.WithMessage(err, "failed to endorse proposal")
 		}
@@ -201,11 +209,14 @@ func (a *ApproverForMyOrg) Approve() error {
 	if proposalResponse.Response.Status != int32(cb.Status_SUCCESS) {
 		return errors.Errorf("proposal failed with status: %d - %s", proposalResponse.Response.Status, proposalResponse.Response.Message)
 	}
+
+	fmt.Println("CreateSignedTx before")
 	// assemble a signed transaction (it's an Envelope message)
 	env, err := protoutil.CreateSignedTx(proposal, a.Signer, responses...)
 	if err != nil {
 		return errors.WithMessage(err, "failed to create signed transaction")
 	}
+	fmt.Println("CreateSignedTx after")
 	var dg *chaincode.DeliverGroup
 	var ctx context.Context
 	if a.Input.WaitForEvent {
@@ -221,16 +232,21 @@ func (a *ApproverForMyOrg) Approve() error {
 			a.Input.ChannelID,
 			txID,
 		)
+
+		fmt.Println("before  connect")
 		// connect to deliver service on all peers
 		err := dg.Connect(ctx)
+		fmt.Println("after  connect")
 		if err != nil {
 			return err
 		}
 	}
 
+	fmt.Println("before  broadcast")
 	if err = a.BroadcastClient.Send(env); err != nil {
 		return errors.WithMessage(err, "failed to send transaction")
 	}
+	fmt.Println("after  broadcast")
 
 	if dg != nil && ctx != nil {
 		// wait for event that contains the txID from all peers
@@ -321,6 +337,7 @@ func (a *ApproverForMyOrg) createProposal(inputTxID string) (proposal *pb.Propos
 		},
 	}
 
+	fmt.Println("a.Signer.Serialize()", reflect.ValueOf(a.Signer).Type())
 	creatorBytes, err := a.Signer.Serialize()
 	if err != nil {
 		return nil, "", errors.WithMessage(err, "failed to serialize identity")

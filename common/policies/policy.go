@@ -8,6 +8,7 @@ package policies
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/golang/protobuf/proto"
@@ -283,6 +284,7 @@ func (pl *PolicyLogger) EvaluateSignedData(signatureSet []*protoutil.SignedData)
 		defer logger.Debugf("== Done Evaluating %T Policy %s", pl.Policy, pl.policyName)
 	}
 
+	fmt.Println("PolicyLogger EvaluateSignedData", reflect.ValueOf(pl.Policy).Type(), reflect.ValueOf(pl.Policy).Type().Name())
 	err := pl.Policy.EvaluateSignedData(signatureSet)
 	if err != nil {
 		logger.Debugf("Signature set did not satisfy policy %s", pl.policyName)

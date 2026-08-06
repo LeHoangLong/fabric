@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package peer
 
 import (
+	"fmt"
 	"runtime/debug"
 
 	"github.com/hyperledger/fabric-protos-go/common"
@@ -332,6 +333,8 @@ func (block *blockEvent) toFilteredBlock() (*peer.FilteredBlock, error) {
 			Type:             common.HeaderType(chdr.Type),
 			TxValidationCode: txsFltr.Flag(txIndex),
 		}
+
+		fmt.Println("Txid", chdr.TxId, string(debug.Stack()))
 
 		if filteredTransaction.Type == common.HeaderType_ENDORSER_TRANSACTION {
 			tx, err := protoutil.UnmarshalTransaction(payload.Data)

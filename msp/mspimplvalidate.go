@@ -11,8 +11,12 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
+	"encoding/base64"
+	"fmt"
 	"math/big"
+	"os"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -202,11 +206,15 @@ func (msp *bccspmsp) validateIdentityOUsV11(id *identity) error {
 			continue
 		}
 
-		// Yes. Then, enforce the certifiers identifier is this is specified.
-		// It is not specified, it means that any certification path is fine.
-		if len(nodeOU.CertifiersIdentifier) != 0 && !bytes.Equal(nodeOU.CertifiersIdentifier, OU.CertifiersIdentifier) {
-			return errors.Errorf("certifiersIdentifier does not match: %v, MSP: [%s]", OUIDs(id.GetOrganizationalUnits()), msp.name)
+		fmt.Println("nodeOU.CertifiersIdentifier V11", base64.StdEncoding.EncodeToString(nodeOU.CertifiersIdentifier))
+		fmt.Println("OU.CertifiersIdentifier V11", base64.StdEncoding.EncodeToString(OU.CertifiersIdentifier))
+		// Yes. Then, enforce the certifiers identifier in this is specified.
+		// If is not specified, it means that any certification path is fine.
+		// nodeOU.CertifiersIdentifier may be a whitelist of concatenated hash values.
+		if len(nodeOU.CertifiersIdentifier) != 0 && !certifiersIdentifierMatch(msp, nodeOU, OU.CertifiersIdentifier) {
+			return errors.Errorf("certifiersIdentifier does not match: %s, MSP: [%s]", OUIDs(id.GetOrganizationalUnits()), msp.name)
 		}
+
 		counter++
 		if counter > 1 {
 			break
@@ -261,9 +269,12 @@ func (msp *bccspmsp) validateIdentityOUsV142(id *identity) error {
 			continue
 		}
 
+		fmt.Println("nodeOU.CertifiersIdentifier", base64.StdEncoding.EncodeToString(nodeOU.CertifiersIdentifier))
+		fmt.Println("OU.CertifiersIdentifier", base64.StdEncoding.EncodeToString(OU.CertifiersIdentifier))
 		// Yes. Then, enforce the certifiers identifier in this is specified.
 		// If is not specified, it means that any certification path is fine.
-		if len(nodeOU.CertifiersIdentifier) != 0 && !bytes.Equal(nodeOU.CertifiersIdentifier, OU.CertifiersIdentifier) {
+		// nodeOU.CertifiersIdentifier may be a whitelist of concatenated hash values.
+		if len(nodeOU.CertifiersIdentifier) != 0 && !certifiersIdentifierMatch(msp, nodeOU, OU.CertifiersIdentifier) {
 			return errors.Errorf("certifiersIdentifier does not match: %s, MSP: [%s]", OUIDs(id.GetOrganizationalUnits()), msp.name)
 		}
 		counter++
@@ -361,4 +372,52 @@ func getSubjectKeyIdentifierFromCert(cert *x509.Certificate) ([]byte, error) {
 	}
 
 	return nil, errors.New("subjectKeyIdentifier not found in certificate")
+}
+
+func certifiersIdentifierMatch(msp *bccspmsp, nodeOU *OUIdentifier, target []byte) bool {
+	if len(nodeOU.CertifiersIdentifier) == 0 {
+		return true
+	}
+
+	whitelist := make([][]byte, 0)
+	whitelist = append(whitelist, nodeOU.CertifiersIdentifier)
+
+	envKey := certifiersWhitelistEnvKey(msp, nodeOU)
+	fmt.Println("envKey", envKey)
+	if envKey != "" {
+		if envWhitelist := os.Getenv(envKey); envWhitelist != "" {
+			envWhitelistValues := strings.Split(envWhitelist, ",")
+			for _, v := range envWhitelistValues {
+				decoded, err := base64.StdEncoding.DecodeString(v)
+				if err == nil && len(decoded) > 0 {
+					whitelist = append(whitelist, decoded)
+				}
+			}
+		}
+	}
+
+	for _, w := range whitelist {
+		if bytes.Equal(w, target) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func certifiersWhitelistEnvKey(msp *bccspmsp, nodeOU *OUIdentifier) string {
+	var base string
+	switch {
+	case msp.clientOU != nil && nodeOU.OrganizationalUnitIdentifier == msp.clientOU.OrganizationalUnitIdentifier:
+		base = "FABRIC_MSP_NODEOU_CLIENT_CERTIFIERS_WHITELIST"
+	case msp.peerOU != nil && nodeOU.OrganizationalUnitIdentifier == msp.peerOU.OrganizationalUnitIdentifier:
+		base = "FABRIC_MSP_NODEOU_PEER_CERTIFIERS_WHITELIST"
+	case msp.adminOU != nil && nodeOU.OrganizationalUnitIdentifier == msp.adminOU.OrganizationalUnitIdentifier:
+		base = "FABRIC_MSP_NODEOU_ADMIN_CERTIFIERS_WHITELIST"
+	case msp.ordererOU != nil && nodeOU.OrganizationalUnitIdentifier == msp.ordererOU.OrganizationalUnitIdentifier:
+		base = "FABRIC_MSP_NODEOU_ORDERER_CERTIFIERS_WHITELIST"
+	default:
+		return ""
+	}
+	return base + "_" + strings.ToUpper(msp.name)
 }
