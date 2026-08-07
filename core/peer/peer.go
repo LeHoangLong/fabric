@@ -7,7 +7,10 @@ SPDX-License-Identifier: Apache-2.0
 package peer
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 	"sync"
 
 	"github.com/hyperledger/fabric-protos-go/common"
@@ -246,6 +249,8 @@ func (p *Peer) createChannel(
 	if err != nil {
 		return err
 	}
+	chanConfJson, _ := json.Marshal(chanConf.ChannelGroup)
+	fmt.Println("peer createChannel", string(chanConfJson))
 
 	bundle, err := channelconfig.NewBundle(cid, chanConf, p.CryptoProvider)
 	if err != nil {
@@ -300,12 +305,62 @@ func (p *Peer) createChannel(
 				certs = append(certs, org.MSP().GetTLSRootCerts()...)
 				certs = append(certs, org.MSP().GetTLSIntermediateCerts()...)
 
+				for _, cert := range certs {
+					fmt.Println("ordererSourceCallback := func(bundle *channelconfig.Bundle)", cid, orgName, string(cert))
+				}
+
 				orgAddresses[orgName] = orderers.OrdererOrg{
 					Addresses: org.Endpoints(),
 					RootCerts: certs,
 				}
 			}
 		}
+		fmt.Println("ordererSourceCallback := func(bundle *channelconfig.Bundle) 2", cid, globalAddresses, len(orgAddresses))
+
+		envKeyAddr := fmt.Sprintf("CHANNEL_%s_ORDERER_ADDRESS", strings.ToUpper(cid))
+		envKeyChannelOrdererAddrMode := fmt.Sprintf("CHANNEL_%s_ORDERER_ADDRESS_MODE", strings.ToUpper(cid))
+
+		envAddr := os.Getenv(envKeyAddr)
+		if envAddr != "" {
+			envAddresses := strings.Split(envAddr, ",")
+			envAddrMode := os.Getenv(envKeyChannelOrdererAddrMode)
+			fmt.Println("envAddresses", envAddr)
+
+			if envAddrMode == "append" {
+				for i, addr := range envAddresses {
+					addr = strings.TrimSpace(addr)
+					if addr == "" {
+						continue
+					}
+					addrCerts := readEnvCertsForIndex(cid, i)
+					globalAddresses = append(globalAddresses, addr)
+					orgAddresses[fmt.Sprintf("env_%d", i)] = orderers.OrdererOrg{
+						Addresses: []string{addr},
+						RootCerts: addrCerts,
+					}
+				}
+			} else {
+				newGlobalAddresses := make([]string, 0, len(envAddresses))
+				newOrgAddresses := map[string]orderers.OrdererOrg{}
+				for i, addr := range envAddresses {
+					addr = strings.TrimSpace(addr)
+					if addr == "" {
+						continue
+					}
+					addrCerts := readEnvCertsForIndex(cid, i)
+					newGlobalAddresses = append(newGlobalAddresses, addr)
+					newOrgAddresses[fmt.Sprintf("env_%d", i)] = orderers.OrdererOrg{
+						Addresses: []string{addr},
+						RootCerts: addrCerts,
+					}
+				}
+				if len(newGlobalAddresses) > 0 {
+					globalAddresses = newGlobalAddresses
+					orgAddresses = newOrgAddresses
+				}
+			}
+		}
+
 		ordererSource.Update(globalAddresses, orgAddresses)
 	}
 
@@ -385,6 +440,17 @@ func (p *Peer) createChannel(
 	p.channels[cid] = channel
 
 	return nil
+}
+
+func readEnvCertsForIndex(channelID string, index int) [][]byte {
+	envKey := fmt.Sprintf("CHANNEL_%s_ORDERER_CERTS_%d", strings.ToUpper(channelID), index)
+	fmt.Println("readEnvCertsForIndex", envKey, os.Getenv(envKey))
+	certPEM := strings.TrimSpace(os.Getenv(envKey))
+	if certPEM == "" {
+		return nil
+	}
+	ret := [][]byte{[]byte(strings.ReplaceAll(certPEM, "\\n", "\n"))}
+	return ret
 }
 
 func (p *Peer) Channel(cid string) *Channel {
@@ -506,6 +572,8 @@ func (p *Peer) Initialize(
 	if err != nil {
 		panic(fmt.Errorf("error in initializing ledgermgmt: %s", err))
 	}
+
+	fmt.Println("peer initialize")
 
 	for _, cid := range ledgerIds {
 		peerLogger.Infof("Loading chain %s", cid)

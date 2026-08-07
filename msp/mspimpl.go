@@ -791,15 +791,8 @@ func (msp *bccspmsp) getUniqueValidationChain(cert *x509.Certificate, opts x509.
 			return nil, errors.WithMessage(err, "failed to get system cert pool")
 		}
 
-		mspLogger.Infof("System certificate pool has %d certificates:", len(systemRoots.Subjects()))
-		for i, subject := range systemRoots.Subjects() {
-			mspLogger.Infof("  [%d] %s", i, string(subject))
-		}
-
-		opts.Roots = nil
-
+		opts.Roots = systemRoots
 		validationChains, err = cert.Verify(opts)
-
 		if err != nil {
 			return nil, errors.WithMessage(err, "the supplied identity is not valid")
 		}
@@ -958,7 +951,6 @@ func (msp *bccspmsp) getCertificationChainIdentifier(id Identity) ([]byte, error
 }
 
 func (msp *bccspmsp) getCertificationChainIdentifierFromChain(chain []*x509.Certificate) ([]byte, error) {
-	fmt.Println("getCertificationChainIdentifierFromChain", msp.cryptoConfig.IdentityIdentifierHashFunction, len(chain))
 	// Hash the chain
 	// Use the hash of the identity's certificate as id in the IdentityIdentifier
 	hashOpt, err := bccsp.GetHashOpt(msp.cryptoConfig.IdentityIdentifierHashFunction)
@@ -971,7 +963,6 @@ func (msp *bccspmsp) getCertificationChainIdentifierFromChain(chain []*x509.Cert
 		return nil, errors.WithMessage(err, "failed getting hash function when computing certification chain identifier")
 	}
 	for i := 0; i < len(chain); i++ {
-		fmt.Println("getCertificationChainIdentifierFromChain ret", base64.StdEncoding.EncodeToString(chain[i].Raw))
 		hf.Write(chain[i].Raw)
 	}
 	return hf.Sum(nil), nil

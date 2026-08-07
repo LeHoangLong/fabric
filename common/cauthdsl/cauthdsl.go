@@ -8,7 +8,6 @@ package cauthdsl
 
 import (
 	"fmt"
-	"runtime/debug"
 	"time"
 
 	cb "github.com/hyperledger/fabric-protos-go/common"
@@ -43,22 +42,19 @@ func compile(policy *cb.SignaturePolicy, identities []*mb.MSPPrincipal) (func([]
 			cauthdslLogger.Debugf("%p gate %d evaluation starts", signedData, grepKey)
 			verified := int32(0)
 			_used := make([]bool, len(used))
-			for i, policy := range policies {
+			for _, policy := range policies {
 				copy(_used, used)
 				passed := policy(signedData, _used)
 				if passed {
 					verified++
 					copy(used, _used)
 				}
-				cauthdslLogger.Info("verified instance ", i, verified, passed)
 			}
 
-			cauthdslLogger.Info("verified", verified, t.NOutOf.N)
-
 			if verified >= t.NOutOf.N {
-				cauthdslLogger.Infof("%p gate %d evaluation succeeds", signedData, grepKey)
+				cauthdslLogger.Debugf("%p gate %d evaluation succeeds", signedData, grepKey)
 			} else {
-				cauthdslLogger.Infof("%p gate %d evaluation fails\n%s", signedData, grepKey, debug.Stack())
+				cauthdslLogger.Debugf("%p gate %d evaluation fails", signedData, grepKey)
 			}
 
 			return verified >= t.NOutOf.N
@@ -70,26 +66,26 @@ func compile(policy *cb.SignaturePolicy, identities []*mb.MSPPrincipal) (func([]
 
 		signedByID := identities[t.SignedBy]
 		return func(signedData []msp.Identity, used []bool) bool {
-			cauthdslLogger.Warningf("%p signed by %d principal evaluation starts (used %v)", signedData, t.SignedBy, used)
+			cauthdslLogger.Debugf("%p signed by %d principal evaluation starts (used %v)", signedData, t.SignedBy, used)
 			for i, sd := range signedData {
 				if used[i] {
-					cauthdslLogger.Warningf("%p skipping identity %d because it has already been used", signedData, i)
+					cauthdslLogger.Debugf("%p skipping identity %d because it has already been used", signedData, i)
 					continue
 				}
 				if cauthdslLogger.IsEnabledFor(zapcore.DebugLevel) {
 					// Unlike most places, this is a huge print statement, and worth checking log level before create garbage
-					cauthdslLogger.Warningf("%p processing identity %d - %v", signedData, i, sd.GetIdentifier())
+					cauthdslLogger.Debugf("%p processing identity %d - %v", signedData, i, sd.GetIdentifier())
 				}
 				err := sd.SatisfiesPrincipal(signedByID)
 				if err != nil {
-					cauthdslLogger.Warningf("%p identity %d does not satisfy principal: %s", signedData, i, err)
+					cauthdslLogger.Debugf("%p identity %d does not satisfy principal: %s", signedData, i, err)
 					continue
 				}
-				cauthdslLogger.Warningf("%p principal evaluation succeeds for identity %d", signedData, i)
+				cauthdslLogger.Debugf("%p principal evaluation succeeds for identity %d", signedData, i)
 				used[i] = true
 				return true
 			}
-			cauthdslLogger.Warningf("%p principal evaluation fails\n", signedData)
+			cauthdslLogger.Debugf("%p principal evaluation fails\n", signedData)
 			return false
 		}, nil
 	default:

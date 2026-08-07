@@ -8,8 +8,10 @@ package deliverservice
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -76,6 +78,8 @@ type Config struct {
 // the specified in the configuration ordering service, in case it
 // fails to dial to it, return nil
 func NewDeliverService(conf *Config) DeliverService {
+	confJson, _ := json.Marshal(conf.OrdererSource)
+	fmt.Println("NewDeliverService(conf *Config)", string(confJson), string(debug.Stack()))
 	ds := &deliverServiceImpl{
 		conf:           conf,
 		blockProviders: make(map[string]*blocksprovider.Deliverer),
@@ -89,6 +93,10 @@ type DialerAdapter struct {
 
 func (da DialerAdapter) Dial(address string, rootCerts [][]byte) (*grpc.ClientConn, error) {
 	cc := da.ClientConfig
+
+	for _, cert := range rootCerts {
+		fmt.Println("func (da DialerAdapter) Dial(address string, rootCerts [][]byte) (*grpc.ClientConn, error)", string(cert), string(debug.Stack()))
+	}
 	cc.SecOpts.ServerRootCAs = rootCerts
 	return cc.Dial(address)
 }
@@ -141,6 +149,9 @@ func (d *deliverServiceImpl) StartDeliverForChannel(chainID string, ledgerInfo b
 		YieldLeadership:     !d.conf.IsStaticLeader,
 	}
 
+	blockProviderJson, _ := json.Marshal(dc)
+	fmt.Println("blockProviderJson", string(blockProviderJson))
+
 	if dc.BlockGossipDisabled {
 		logger.Infow("This peer will retrieve blocks from ordering service (will not disseminate them to other peers in the organization)", "channel", chainID)
 	} else {
@@ -160,6 +171,8 @@ func (d *deliverServiceImpl) StartDeliverForChannel(chainID string, ledgerInfo b
 		dc.DeliverBlocks()
 		finalizer()
 	}()
+
+	fmt.Println("StartDeliverForChannel", string(debug.Stack()))
 	return nil
 }
 

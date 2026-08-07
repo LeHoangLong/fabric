@@ -8,6 +8,7 @@ package blocksprovider
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"time"
 
@@ -290,6 +291,7 @@ func (d *Deliverer) connect(seekInfoEnv *common.Envelope) (orderer.AtomicBroadca
 		return nil, nil, nil, errors.WithMessage(err, "could not get orderer endpoints")
 	}
 
+	fmt.Println("endpoint.Address", endpoint.Address)
 	conn, err := d.Dialer.Dial(endpoint.Address, endpoint.RootCerts)
 	if err != nil {
 		return nil, nil, nil, errors.WithMessagef(err, "could not dial endpoint '%s'", endpoint.Address)

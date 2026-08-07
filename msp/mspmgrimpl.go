@@ -7,9 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package msp
 
 import (
-	"encoding/json"
 	"fmt"
-	"reflect"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric-protos-go/msp"
@@ -88,8 +86,6 @@ func (mgr *mspManagerImpl) DeserializeIdentity(serializedID []byte) (Identity, e
 	}
 
 	// we can now attempt to obtain the MSP
-	mgrmspsMapJson, _ := json.Marshal(mgr.mspsMap)
-	fmt.Println("mgr.mspsMap", string(mgrmspsMapJson))
 	msp := mgr.mspsMap[sId.Mspid]
 	if msp == nil {
 		return nil, errors.Errorf("MSP %s is not defined on channel", sId.Mspid)
@@ -103,7 +99,6 @@ func (mgr *mspManagerImpl) DeserializeIdentity(serializedID []byte) (Identity, e
 		fmt.Println("idemixMSPWrapper")
 		return t.deserializeIdentityInternal(sId.IdBytes)
 	default:
-		fmt.Println("default", reflect.ValueOf(t).Type())
 		return t.DeserializeIdentity(serializedID)
 	}
 }
