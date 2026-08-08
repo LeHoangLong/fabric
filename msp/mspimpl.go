@@ -371,7 +371,10 @@ func (msp *bccspmsp) hasOURoleInternal(id *identity, mspRole m.MSPRole_MSPRoleTy
 	}
 
 	for _, OU := range id.GetOrganizationalUnits() {
-		if certifiersIdentifierMatch(msp, nodeOU, OU.CertifiersIdentifier) {
+		if len(nodeOU.CertifiersIdentifier) == 0 || bytes.Equal(nodeOU.CertifiersIdentifier, OU.CertifiersIdentifier) {
+			return nil
+		}
+		if msp.isInAdditionalMspIdentifieList(mspRole.String(), OU.CertifiersIdentifier) == nil {
 			return nil
 		}
 	}
@@ -497,9 +500,11 @@ func (msp *bccspmsp) satisfiesPrincipalInternalPreV13(id Identity, principal *m.
 			if err != nil {
 				return errors.Wrap(err, "could not get certification chain")
 			}
-			envKey := fmt.Sprintf("%s_ADDITIONAL_PRINCIPAL_CERTIFICATE_HASH_FOR_ROLE_%s", strings.ToUpper(mspRole.MspIdentifier), strings.ToUpper(mspRole.Role.String()))
-			if !msp.isInMspIdentifierWhitelist(envKey, certChain) {
+			if len(certChain) == 0 {
 				return errors.Errorf("the identity is a member of a different MSP (expected %s, got %s)", mspRole.MspIdentifier, id.GetMSPIdentifier())
+			}
+			if err := msp.isInAdditionalMspIdentifieList(mspRole.Role.String(), certChain[0].Raw); err != nil {
+				return errors.Errorf("the identity is a member of a different MSP (expected %s, got %s): %s", mspRole.MspIdentifier, id.GetMSPIdentifier(), err)
 			}
 		}
 
@@ -561,9 +566,11 @@ func (msp *bccspmsp) satisfiesPrincipalInternalPreV13(id Identity, principal *m.
 			if err != nil {
 				return errors.Wrap(err, "could not get certification chain")
 			}
-			envKey := fmt.Sprintf("%s_ADDITIONAL_PRINCIPAL_CERTIFICATE_HASH_FOR_OU", strings.ToUpper(OU.MspIdentifier))
-			if !msp.isInMspIdentifierWhitelist(envKey, certChain) {
+			if len(certChain) == 0 {
 				return errors.Errorf("the identity is a member of a different MSP (expected %s, got %s)", OU.MspIdentifier, id.GetMSPIdentifier())
+			}
+			if err := msp.isInAdditionalMspIdentifieList(OU.OrganizationalUnitIdentifier, certChain[0].Raw); err != nil {
+				return errors.Errorf("the identity is a member of a different MSP (expected %s, got %s): %s", OU.MspIdentifier, id.GetMSPIdentifier(), err)
 			}
 		}
 
@@ -646,13 +653,14 @@ func (msp *bccspmsp) satisfiesPrincipalInternalV142(id Identity, principal *m.MS
 			return errors.Wrap(err, "could not unmarshal MSPRole from principal")
 		}
 
-		envKey := fmt.Sprintf("%s_ADDITIONAL_PRINCIPAL_CERTIFICATE_HASH_FOR_ROLE_%s", strings.ToUpper(mspRole.MspIdentifier), strings.ToUpper(mspRole.Role.String()))
-
 		// at first, we check whether the MSP
 		// identifier is the same as that of the identity
 		if mspRole.MspIdentifier != msp.name {
-			if !msp.isInMspIdentifierWhitelist(envKey, certChain) {
+			if len(certChain) == 0 {
 				return errors.Errorf("the identity is a member of a different MSP (expected %s, got %s)", mspRole.MspIdentifier, id.GetMSPIdentifier())
+			}
+			if err := msp.isInAdditionalMspIdentifieList(mspRole.Role.String(), certChain[0].Raw); err != nil {
+				return errors.Errorf("the identity is a member of a different MSP (expected %s, got %s): %s", mspRole.MspIdentifier, id.GetMSPIdentifier(), err)
 			}
 		}
 
@@ -706,26 +714,21 @@ func (msp *bccspmsp) isInAdmins(id *identity) bool {
 	return false
 }
 
-func (msp *bccspmsp) isInMspIdentifierWhitelist(envKey string, certChain []*x509.Certificate) bool {
-	if len(certChain) == 0 {
-		return false
-	}
-	certHash := sha256.Sum256(certChain[0].Raw)
-	certHashB64 := base64.StdEncoding.EncodeToString(certHash[:])
-
+func (msp *bccspmsp) isInAdditionalMspIdentifieList(role string, certificate []byte) error {
+	hash := sha256.Sum256(certificate)
+	hashB64 := base64.StdEncoding.EncodeToString(hash[:])
+	envKey := fmt.Sprintf("%s_ADDITIONAL_PRINCIPAL_CERTIFICATE_HASH_FOR_ROLE_%s", strings.ToUpper(msp.name), strings.ToUpper(role))
 	envWhitelist := os.Getenv(envKey)
-
 	if envWhitelist == "" {
-		return false
+		return errors.Errorf("additional certificate hash for role [%s] not whitelisted, MSP: [%s], certhash: [%s]", role, msp.name, hashB64)
 	}
-
 	for _, v := range strings.Split(envWhitelist, ",") {
 		v = strings.TrimSpace(v)
-		if v != "" && v == certHashB64 {
-			return true
+		if v != "" && v == hashB64 {
+			return nil
 		}
 	}
-	return false
+	return errors.Errorf("additional certificate hash for role [%s] not whitelisted, MSP: [%s], certhash: [%s]", role, msp.name, hashB64)
 }
 
 // getCertificationChain returns the certification chain of the passed identity within this msp
@@ -928,7 +931,6 @@ func (msp *bccspmsp) getCertificationChainIdentifier(id Identity) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
-
 
 	return ret, nil
 }
