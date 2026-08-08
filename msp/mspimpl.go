@@ -918,12 +918,8 @@ func (msp *bccspmsp) getCertificationChainIdentifier(id Identity) ([]byte, error
 
 	// chain[0] is the certificate representing the identity.
 	// It will be discarded
-	ret, err := msp.getCertificationChainIdentifierFromChain(chain[1:])
-	if err != nil {
-		return nil, err
-	}
 
-	return ret, nil
+	return msp.getCertificationChainIdentifierFromChain(chain[1:])
 }
 
 func (msp *bccspmsp) getCertificationChainIdentifierFromChain(chain []*x509.Certificate) ([]byte, error) {
