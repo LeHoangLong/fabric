@@ -733,7 +733,7 @@ func (msp *bccspmsp) isInAdditionalMspIdentifierList(role string, certificate []
 
 // getCertificationChain returns the certification chain of the passed identity within this msp
 func (msp *bccspmsp) getCertificationChain(id Identity) ([]*x509.Certificate, error) {
-	mspLogger.Warningf("MSP %s getting certification chain", msp.name)
+	mspLogger.Debugf("MSP %s getting certification chain", msp.name)
 
 	switch id := id.(type) {
 	// If this identity is of this specific type,
@@ -774,16 +774,7 @@ func (msp *bccspmsp) getUniqueValidationChain(cert *x509.Certificate, opts x509.
 
 	validationChains, err := cert.Verify(opts)
 	if err != nil {
-		systemRoots, err := x509.SystemCertPool()
-		if err != nil {
-			return nil, errors.WithMessage(err, "failed to get system cert pool")
-		}
-
-		opts.Roots = systemRoots
-		validationChains, err = cert.Verify(opts)
-		if err != nil {
-			return nil, errors.WithMessage(err, "the supplied identity is not valid")
-		}
+		return nil, errors.WithMessage(err, "the supplied identity is not valid")
 	}
 
 	// we only support a single validation chain;

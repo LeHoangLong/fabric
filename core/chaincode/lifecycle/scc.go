@@ -396,7 +396,7 @@ func (i *Invocation) ApproveChaincodeDefinitionForMyOrg(input *lb.ApproveChainco
 		},
 	}
 
-	logger.Infof("received invocation of ApproveChaincodeDefinitionForMyOrg on channel '%s' for definition '%s'",
+	logger.Debugf("received invocation of ApproveChaincodeDefinitionForMyOrg on channel '%s' for definition '%s'",
 		i.Stub.GetChannelID(),
 		cd,
 	)
