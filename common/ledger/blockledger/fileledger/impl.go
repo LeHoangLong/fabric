@@ -7,8 +7,6 @@ SPDX-License-Identifier: Apache-2.0
 package fileledger
 
 import (
-	"fmt"
-
 	cb "github.com/hyperledger/fabric-protos-go/common"
 	ab "github.com/hyperledger/fabric-protos-go/orderer"
 	"github.com/hyperledger/fabric/common/flogging"
@@ -77,7 +75,6 @@ func (fl *FileLedger) Iterator(startPosition *ab.SeekPosition) (blockledger.Iter
 		if err != nil {
 			logger.Panic(err)
 		}
-		fmt.Println("fl.blockStore.GetBlockchainInfo", info.Height)
 		newestBlockNumber := info.Height - 1
 		if info.BootstrappingSnapshotInfo != nil && newestBlockNumber == info.BootstrappingSnapshotInfo.LastBlockInSnapshot {
 			newestBlockNumber = info.Height
@@ -116,7 +113,6 @@ func (fl *FileLedger) Height() uint64 {
 // Append a new block to the ledger
 func (fl *FileLedger) Append(block *cb.Block) error {
 	err := fl.blockStore.AddBlock(block)
-	fmt.Println("func (fl *FileLedger) Append(block *cb.Block) error Appending block", err)
 	if err == nil {
 		close(fl.signal)
 		fl.signal = make(chan struct{})

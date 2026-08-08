@@ -8,7 +8,6 @@ package etcdraft
 
 import (
 	"context"
-	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"sync"
@@ -1567,8 +1566,6 @@ func (c *Chain) checkForEvictionNCertRotation(env *common.Envelope) bool {
 		return false
 	}
 
-	membershipUpdatesJson, _ := json.Marshal(membershipUpdates)
-	fmt.Println("membershipUpdatesJson", string(membershipUpdatesJson), c.raftID)
 	if membershipUpdates.RotatedNode == c.raftID {
 		if _, found := membershipUpdates.NewConsenters[c.raftID]; !found {
 			c.logger.Infof("Detected certificate rotation of our node")

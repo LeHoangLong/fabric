@@ -563,7 +563,6 @@ func ChaincodeInvokeOrQuery(
 	bc common.BroadcastClient,
 ) (*pb.ProposalResponse, error) {
 	// Build the ChaincodeInvocationSpec message
-	fmt.Println("ChaincodeInvokeOrQuery txID", txID)
 	invocation := &pb.ChaincodeInvocationSpec{ChaincodeSpec: spec}
 
 	creator, err := signer.Serialize()
@@ -772,7 +771,6 @@ func (dg *DeliverGroup) Wait(ctx context.Context) error {
 		return nil
 	}
 
-	fmt.Println("len(dg.Clients)", len(dg.Clients))
 	dg.wg.Add(len(dg.Clients))
 	for _, client := range dg.Clients {
 		go dg.ClientWait(client)
@@ -799,7 +797,6 @@ func (dg *DeliverGroup) ClientWait(dc *DeliverClient) {
 	defer dg.wg.Done()
 	for {
 		resp, err := dc.Connection.Recv()
-		fmt.Println("resp", resp, err)
 		if err != nil {
 			err = errors.WithMessagef(err, "error receiving from deliver filtered at %s", dc.Address)
 			dg.setError(err)
@@ -808,9 +805,7 @@ func (dg *DeliverGroup) ClientWait(dc *DeliverClient) {
 		switch r := resp.Type.(type) {
 		case *pb.DeliverResponse_FilteredBlock:
 			filteredTransactions := r.FilteredBlock.FilteredTransactions
-			fmt.Println("pb.DeliverResponse_FilteredBlock", len(filteredTransactions))
 			for _, tx := range filteredTransactions {
-				fmt.Println("tx.Txid", tx.Txid, dg.TxID, tx.TxValidationCode)
 				if tx.Txid == dg.TxID {
 					logger.Infof("txid [%s] committed with status (%s) at %s", dg.TxID, tx.TxValidationCode, dc.Address)
 					if tx.TxValidationCode != pb.TxValidationCode_VALID {
@@ -821,12 +816,10 @@ func (dg *DeliverGroup) ClientWait(dc *DeliverClient) {
 				}
 			}
 		case *pb.DeliverResponse_Status:
-			fmt.Println("pb.DeliverResponse_Status")
 			err = errors.Errorf("deliver completed with status (%s) before txid received", r.Status)
 			dg.setError(err)
 			return
 		default:
-			fmt.Println("pb.default")
 			err = errors.Errorf("received unexpected response type (%T) from %s", r, dc.Address)
 			dg.setError(err)
 			return

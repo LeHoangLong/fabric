@@ -68,7 +68,6 @@ func NewEndorserClient(cc *grpc.ClientConn) EndorserClient {
 
 func (c *endorserClient) ProcessProposal(ctx context.Context, in *SignedProposal, opts ...grpc.CallOption) (*ProposalResponse, error) {
 	out := new(ProposalResponse)
-	fmt.Println("c.cc.Target()", c.cc.Target())
 	err := c.cc.Invoke(ctx, "/protos.Endorser/ProcessProposal", in, out, opts...)
 	if err != nil {
 		return nil, err

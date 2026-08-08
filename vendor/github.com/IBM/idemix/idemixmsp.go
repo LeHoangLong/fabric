@@ -399,7 +399,6 @@ func (msp *Idemixmsp) satisfiesPrincipalValidated(id Identity, principal *m.MSPP
 		// at first, we check whether the MSP
 		// identifier is the same as that of the identity
 		if mspRole.MspIdentifier != msp.name {
-			fmt.Println("satisfiesPrincipalValidated idemix 2")
 			return errors.Errorf("the identity is a member of a different MSP (expected %s, got %s)", mspRole.MspIdentifier, id.GetMSPIdentifier())
 		}
 
@@ -456,7 +455,6 @@ func (msp *Idemixmsp) satisfiesPrincipalValidated(id Identity, principal *m.MSPP
 		// at first, we check whether the MSP
 		// identifier is the same as that of the identity
 		if ou.MspIdentifier != msp.name {
-			fmt.Println("satisfiesPrincipalValidated idemix")
 			return errors.Errorf("the identity is a member of a different MSP (expected %s, got %s)", ou.MspIdentifier, id.GetMSPIdentifier())
 		}
 

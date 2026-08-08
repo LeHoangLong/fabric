@@ -8,7 +8,6 @@ package common
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 
 	ab "github.com/hyperledger/fabric-protos-go/orderer"
 	"github.com/pkg/errors"
@@ -51,7 +50,6 @@ func (oc *OrdererClient) Deliver() (ab.AtomicBroadcast_DeliverClient, error) {
 		return nil, errors.WithMessagef(err, "orderer client failed to connect to %s", oc.address)
 	}
 
-	fmt.Print("deliver orderer")
 	// TODO: check to see if we should actually handle error before returning
 	return ab.NewAtomicBroadcastClient(conn).Deliver(context.TODO())
 }

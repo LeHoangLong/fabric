@@ -164,7 +164,6 @@ func (r *Registrar) init(consenters map[string]consensus.Consenter) {
 	r.initSystemChannel(existingChannels)
 
 	// Initialize application channels, by creating either a consensus.Chain or a follower.Chain.
-	fmt.Println("r.systemChannelID", r.systemChannelID)
 	if r.systemChannelID == "" {
 		r.initAppChannels(existingChannels, channelsWithJoinBlock)
 	} else {
@@ -303,9 +302,6 @@ func (r *Registrar) initAppChannels(existingChannels []string, channelsWithJoinB
 		}
 	}
 
-	fmt.Println("existingChannels", existingChannels)
-	fmt.Println("channelsWithJoinBlock", channelsWithJoinBlock)
-
 	// init app channels without join-blocks
 	for _, channelID := range existingChannels {
 		if _, withJoinBlock := channelsWithJoinBlock[channelID]; withJoinBlock {
@@ -342,8 +338,6 @@ func (r *Registrar) initAppChannels(existingChannels []string, channelsWithJoinB
 		if err != nil {
 			logger.Panicf("Failed to determine cluster membership from config-block, error: %s", err)
 		}
-
-		fmt.Println("isMember", isMember)
 
 		if isMember {
 			chainSupport, err := newChainSupport(r, ledgerRes, r.consenters, r.signer, r.blockcutterMetrics, r.bccsp)
@@ -478,8 +472,6 @@ func (r *Registrar) GetConsensusChain(chainID string) consensus.Chain {
 func (r *Registrar) GetChain(chainID string) *ChainSupport {
 	r.lock.RLock()
 	defer r.lock.RUnlock()
-
-	fmt.Println("chains", r.chains)
 
 	return r.chains[chainID]
 }

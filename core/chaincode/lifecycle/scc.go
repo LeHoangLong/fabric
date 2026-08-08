@@ -9,7 +9,6 @@ package lifecycle
 import (
 	"fmt"
 	"regexp"
-	"runtime/debug"
 
 	"github.com/hyperledger/fabric-chaincode-go/shim"
 	"github.com/hyperledger/fabric-protos-go/common"
@@ -415,12 +414,6 @@ func (i *Invocation) ApproveChaincodeDefinitionForMyOrg(input *lb.ApproveChainco
 	); err != nil {
 		return nil, err
 	}
-
-	logger.Infof("finished handling invocation of ApproveChaincodeDefinitionForMyOrg on channel '%s' for definition '%s'\n%s",
-		i.Stub.GetChannelID(),
-		cd,
-		debug.Stack(),
-	)
 
 	return &lb.ApproveChaincodeDefinitionForMyOrgResult{}, nil
 }

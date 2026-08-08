@@ -7,8 +7,6 @@ SPDX-License-Identifier: Apache-2.0
 package msp
 
 import (
-	"fmt"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric-protos-go/msp"
 	"github.com/hyperledger/fabric/common/flogging"
@@ -93,10 +91,8 @@ func (mgr *mspManagerImpl) DeserializeIdentity(serializedID []byte) (Identity, e
 
 	switch t := msp.(type) {
 	case *bccspmsp:
-		fmt.Println("bccspmsp")
 		return t.deserializeIdentityInternal(sId.IdBytes)
 	case *idemixMSPWrapper:
-		fmt.Println("idemixMSPWrapper")
 		return t.deserializeIdentityInternal(sId.IdBytes)
 	default:
 		return t.DeserializeIdentity(serializedID)

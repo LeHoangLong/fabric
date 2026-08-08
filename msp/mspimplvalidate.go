@@ -12,7 +12,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/base64"
-	"fmt"
 	"math/big"
 	"os"
 	"reflect"
@@ -206,8 +205,6 @@ func (msp *bccspmsp) validateIdentityOUsV11(id *identity) error {
 			continue
 		}
 
-		fmt.Println("nodeOU.CertifiersIdentifier V11", base64.StdEncoding.EncodeToString(nodeOU.CertifiersIdentifier))
-		fmt.Println("OU.CertifiersIdentifier V11", base64.StdEncoding.EncodeToString(OU.CertifiersIdentifier))
 		// Yes. Then, enforce the certifiers identifier in this is specified.
 		// If is not specified, it means that any certification path is fine.
 		// nodeOU.CertifiersIdentifier may be a whitelist of concatenated hash values.
@@ -269,8 +266,6 @@ func (msp *bccspmsp) validateIdentityOUsV142(id *identity) error {
 			continue
 		}
 
-		fmt.Println("nodeOU.CertifiersIdentifier", base64.StdEncoding.EncodeToString(nodeOU.CertifiersIdentifier))
-		fmt.Println("OU.CertifiersIdentifier", base64.StdEncoding.EncodeToString(OU.CertifiersIdentifier))
 		// Yes. Then, enforce the certifiers identifier in this is specified.
 		// If is not specified, it means that any certification path is fine.
 		// nodeOU.CertifiersIdentifier may be a whitelist of concatenated hash values.
@@ -383,7 +378,6 @@ func certifiersIdentifierMatch(msp *bccspmsp, nodeOU *OUIdentifier, target []byt
 	whitelist = append(whitelist, nodeOU.CertifiersIdentifier)
 
 	envKey := certifiersWhitelistEnvKey(msp, nodeOU)
-	fmt.Println("envKey", envKey)
 	if envKey != "" {
 		if envWhitelist := os.Getenv(envKey); envWhitelist != "" {
 			envWhitelistValues := strings.Split(envWhitelist, ",")

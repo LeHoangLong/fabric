@@ -7,8 +7,6 @@ SPDX-License-Identifier: Apache-2.0
 package configtx
 
 import (
-	"fmt"
-	"reflect"
 	"strings"
 
 	cb "github.com/hyperledger/fabric-protos-go/common"
@@ -94,7 +92,6 @@ func (vi *ValidatorImpl) verifyDeltaSet(deltaSet map[string]comparable, signedDa
 			return errors.Errorf("unexpected missing policy %s for item %s", existing.modPolicy(), key)
 		}
 
-		fmt.Println("policy", reflect.ValueOf(policy).Type())
 		// Ensure the policy is satisfied
 		if err := policy.EvaluateSignedData(signedData); err != nil {
 			logger.Warnw("policy not satisfied for channel configuration update", "key", key, "policy", policy, "signingIdenties", protoutil.LogMessageForSerializedIdentities(signedData))

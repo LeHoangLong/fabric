@@ -188,7 +188,6 @@ func (c custodianLauncherAdapter) Stop(ccid string) error {
 }
 
 func serve(args []string) error {
-	fmt.Println("[DEBUG] serve() started")
 	logger.Infof("Starting %s", version.GetInfo())
 
 	// Info logging for peer config, includes core.yaml settings and environment variable overrides
@@ -216,7 +215,6 @@ func serve(args []string) error {
 	if mspType != msp.FABRIC {
 		panic("Unsupported msp type " + msp.ProviderTypeToString(mspType))
 	}
-	fmt.Println("[DEBUG] MSP type check passed")
 
 	// Trace RPCs with the golang.org/x/net/trace package. This was moved out of
 	// the deliver service connection factory as it has process wide implications
@@ -228,7 +226,6 @@ func serve(args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("[DEBUG] coreConfig loaded")
 
 	platformRegistry := platforms.NewRegistry(platforms.SupportedPlatforms...)
 
@@ -238,7 +235,6 @@ func serve(args []string) error {
 		return errors.WithMessage(err, "failed to initialize operations subsystem")
 	}
 	defer opsSystem.Stop()
-	fmt.Println("[DEBUG] operations system started")
 
 	metricsProvider := opsSystem.Provider
 	logObserver := floggingmetrics.NewObserver(metricsProvider)
@@ -328,7 +324,6 @@ func serve(args []string) error {
 	if err != nil {
 		logger.Panicf("Failed to serialize the signing identity: %v", err)
 	}
-	fmt.Printf("[DEBUG] signing identity obtained for MSP ID=[%s]\n", mspID)
 
 	membershipInfoProvider := privdata.NewMembershipInfoProvider(
 		mspID,
@@ -466,7 +461,6 @@ func serve(args []string) error {
 	if err != nil {
 		logger.Fatalf("Failed to create peer server (%s)", err)
 	}
-	fmt.Printf("[DEBUG] peer gRPC server created on %s\n", listenAddr)
 
 	// FIXME: Creating the gossip service has the side effect of starting a bunch
 	// of go routines and registration with the grpc server.
@@ -484,14 +478,12 @@ func serve(args []string) error {
 		return errors.WithMessage(err, "failed to initialize gossip service")
 	}
 	defer gossipService.Stop()
-	fmt.Println("[DEBUG] gossip service initialized")
 
 	peerInstance.GossipService = gossipService
 
 	if err := lifecycleCache.InitializeLocalChaincodes(); err != nil {
 		return errors.WithMessage(err, "could not initialize local chaincodes")
 	}
-	fmt.Println("[DEBUG] local chaincodes initialized")
 
 	// Parameter overrides must be processed before any parameters are
 	// cached. Failures to cache cause the server to terminate immediately.
@@ -531,7 +523,6 @@ func serve(args []string) error {
 	if err != nil {
 		logger.Panicf("Failed to create chaincode server: %s", err)
 	}
-	fmt.Printf("[DEBUG] chaincode server created, endpoint=%s\n", ccEndpoint)
 
 	// get user mode
 	userRunsCC := chaincode.IsDevMode()
@@ -708,7 +699,6 @@ func serve(args []string) error {
 		streamHandler: chaincodeSupport,
 	}
 	go chaincodeCustodian.Work(buildRegistry, containerRouter, custodianLauncher)
-	fmt.Println("[DEBUG] chaincode support configured, custodian started")
 
 	ccSupSrv := pb.ChaincodeSupportServer(chaincodeSupport)
 	if tlsEnabled {
@@ -729,7 +719,6 @@ func serve(args []string) error {
 
 	// start the chaincode specific gRPC listening service
 	go ccSrv.Start()
-	fmt.Println("[DEBUG] chaincode gRPC server goroutine started")
 
 	logger.Debugf("Running peer")
 
@@ -781,7 +770,6 @@ func serve(args []string) error {
 	}
 
 	logger.Infof("Deployed system chaincodes")
-	fmt.Println("[DEBUG] system chaincodes deployed")
 
 	// register the lifecycleMetadataManager to get updates from the legacy
 	// chaincode; lifecycleMetadataManager will aggregate these updates with
@@ -826,7 +814,6 @@ func serve(args []string) error {
 		lifecycleValidatorCommitter,
 		coreConfig.ValidatorPoolSize,
 	)
-	fmt.Println("[DEBUG] peer initialized, channels brought up")
 
 	var discoveryService *discovery.Service
 	if coreConfig.DiscoveryEnabled {
@@ -891,7 +878,6 @@ func serve(args []string) error {
 		syscall.SIGINT:  func() { containerRouter.Shutdown(5 * time.Second); serve <- nil },
 		syscall.SIGTERM: func() { containerRouter.Shutdown(5 * time.Second); serve <- nil },
 	}))
-	fmt.Println("[DEBUG] signal handlers registered")
 
 	logger.Infof("Started peer with ID=[%s], network ID=[%s], address=[%s]", coreConfig.PeerID, coreConfig.NetworkID, coreConfig.PeerAddress)
 
@@ -937,7 +923,6 @@ func serve(args []string) error {
 		}
 		serve <- grpcErr
 	}()
-	fmt.Println("[DEBUG] peer gRPC server goroutine started, entering blocking wait")
 
 	// Block until grpc server exits
 	return <-serve

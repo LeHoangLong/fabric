@@ -9,9 +9,6 @@ package etcdraft
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/json"
-	"fmt"
-	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -252,8 +249,6 @@ func (n *node) abdicateLeadership() error {
 	notifyC, unsubscribe := n.subscribeToLeaderChange()
 	defer unsubscribe()
 
-	projectJson, _ := json.Marshal(status)
-	fmt.Println("status.Progress", string(projectJson))
 	var transferee uint64
 	for id, pr := range status.Progress {
 		if id == status.ID {
@@ -269,7 +264,7 @@ func (n *node) abdicateLeadership() error {
 	}
 
 	if transferee == raft.None {
-		n.logger.Errorf("No follower is qualified as transferee, abort leader transfer\n%s", debug.Stack())
+		n.logger.Errorf("No follower is qualified as transferee, abort leader transfer")
 		return ErrNoAvailableLeaderCandidate
 	}
 

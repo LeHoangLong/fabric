@@ -7,7 +7,6 @@ SPDX-License-Identifier: Apache-2.0
 package peer
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -249,9 +248,6 @@ func (p *Peer) createChannel(
 	if err != nil {
 		return err
 	}
-	chanConfJson, _ := json.Marshal(chanConf.ChannelGroup)
-	fmt.Println("peer createChannel", string(chanConfJson))
-
 	bundle, err := channelconfig.NewBundle(cid, chanConf, p.CryptoProvider)
 	if err != nil {
 		return err
@@ -305,17 +301,12 @@ func (p *Peer) createChannel(
 				certs = append(certs, org.MSP().GetTLSRootCerts()...)
 				certs = append(certs, org.MSP().GetTLSIntermediateCerts()...)
 
-				for _, cert := range certs {
-					fmt.Println("ordererSourceCallback := func(bundle *channelconfig.Bundle)", cid, orgName, string(cert))
-				}
-
 				orgAddresses[orgName] = orderers.OrdererOrg{
 					Addresses: org.Endpoints(),
 					RootCerts: certs,
 				}
 			}
 		}
-		fmt.Println("ordererSourceCallback := func(bundle *channelconfig.Bundle) 2", cid, globalAddresses, len(orgAddresses))
 
 		envKeyAddr := fmt.Sprintf("CHANNEL_%s_ORDERER_ADDRESS", strings.ToUpper(cid))
 		envKeyChannelOrdererAddrMode := fmt.Sprintf("CHANNEL_%s_ORDERER_ADDRESS_MODE", strings.ToUpper(cid))
@@ -324,7 +315,6 @@ func (p *Peer) createChannel(
 		if envAddr != "" {
 			envAddresses := strings.Split(envAddr, ",")
 			envAddrMode := os.Getenv(envKeyChannelOrdererAddrMode)
-			fmt.Println("envAddresses", envAddr)
 
 			if envAddrMode == "append" {
 				for i, addr := range envAddresses {
@@ -444,7 +434,6 @@ func (p *Peer) createChannel(
 
 func readEnvCertsForIndex(channelID string, index int) [][]byte {
 	envKey := fmt.Sprintf("CHANNEL_%s_ORDERER_CERTS_%d", strings.ToUpper(channelID), index)
-	fmt.Println("readEnvCertsForIndex", envKey, os.Getenv(envKey))
 	certPEM := strings.TrimSpace(os.Getenv(envKey))
 	if certPEM == "" {
 		return nil
@@ -573,7 +562,6 @@ func (p *Peer) Initialize(
 		panic(fmt.Errorf("error in initializing ledgermgmt: %s", err))
 	}
 
-	fmt.Println("peer initialize")
 
 	for _, cid := range ledgerIds {
 		peerLogger.Infof("Loading chain %s", cid)

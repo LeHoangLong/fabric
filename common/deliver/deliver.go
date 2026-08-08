@@ -8,7 +8,6 @@ package deliver
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"math"
 	"strconv"
@@ -205,7 +204,6 @@ func (h *Handler) deliverBlocks(ctx context.Context, srv *Server, envelope *cb.E
 	}
 
 	chain := h.ChainManager.GetChain(chdr.ChannelId)
-	fmt.Println("chdr.TxId", chdr.TxId, chdr.ChannelId)
 	if chain == nil {
 		// Note, we log this at DEBUG because SDKs will poll waiting for channels to be created
 		// So we would expect our log to be somewhat flooded with these
@@ -290,7 +288,6 @@ func (h *Handler) deliverBlocks(ctx context.Context, srv *Server, envelope *cb.E
 			if number > chain.Reader().Height()-1 {
 				logger.Warningf("[channel: %s] Block %d not found, block number greater than chain length bounds", chdr.ChannelId, number)
 
-				fmt.Println("seekInfo.Behavior", seekInfo.Behavior)
 				return cb.Status_NOT_FOUND, nil
 			}
 		}
