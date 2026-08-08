@@ -201,7 +201,6 @@ func (a *ApproverForMyOrg) Approve() error {
 	if proposalResponse.Response.Status != int32(cb.Status_SUCCESS) {
 		return errors.Errorf("proposal failed with status: %d - %s", proposalResponse.Response.Status, proposalResponse.Response.Message)
 	}
-
 	// assemble a signed transaction (it's an Envelope message)
 	env, err := protoutil.CreateSignedTx(proposal, a.Signer, responses...)
 	if err != nil {
@@ -222,7 +221,6 @@ func (a *ApproverForMyOrg) Approve() error {
 			a.Input.ChannelID,
 			txID,
 		)
-
 		// connect to deliver service on all peers
 		err := dg.Connect(ctx)
 		if err != nil {

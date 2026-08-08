@@ -333,7 +333,6 @@ func (block *blockEvent) toFilteredBlock() (*peer.FilteredBlock, error) {
 			TxValidationCode: txsFltr.Flag(txIndex),
 		}
 
-
 		if filteredTransaction.Type == common.HeaderType_ENDORSER_TRANSACTION {
 			tx, err := protoutil.UnmarshalTransaction(payload.Data)
 			if err != nil {

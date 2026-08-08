@@ -119,7 +119,6 @@ func newBccspMsp(version MSPVersion, defaultBCCSP bccsp.BCCSP) (MSP, error) {
 	theMsp := &bccspmsp{}
 	theMsp.version = version
 	theMsp.bccsp = defaultBCCSP
-
 	switch version {
 	case MSPv1_0:
 		theMsp.internalSetupFunc = theMsp.setupV1
@@ -918,7 +917,6 @@ func (msp *bccspmsp) getCertificationChainIdentifier(id Identity) ([]byte, error
 
 	// chain[0] is the certificate representing the identity.
 	// It will be discarded
-
 	return msp.getCertificationChainIdentifierFromChain(chain[1:])
 }
 

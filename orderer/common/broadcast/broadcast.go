@@ -79,7 +79,6 @@ func (bh *Handler) Handle(srv ab.AtomicBroadcast_BroadcastServer) error {
 
 		resp := bh.ProcessMessage(msg, addr)
 		err = srv.Send(resp)
-
 		if resp.Status != cb.Status_SUCCESS {
 			return err
 		}

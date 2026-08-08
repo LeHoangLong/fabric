@@ -414,7 +414,6 @@ func (i *Invocation) ApproveChaincodeDefinitionForMyOrg(input *lb.ApproveChainco
 	); err != nil {
 		return nil, err
 	}
-
 	return &lb.ApproveChaincodeDefinitionForMyOrgResult{}, nil
 }
 

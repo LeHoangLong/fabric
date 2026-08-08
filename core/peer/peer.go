@@ -248,6 +248,7 @@ func (p *Peer) createChannel(
 	if err != nil {
 		return err
 	}
+
 	bundle, err := channelconfig.NewBundle(cid, chanConf, p.CryptoProvider)
 	if err != nil {
 		return err
@@ -561,7 +562,6 @@ func (p *Peer) Initialize(
 	if err != nil {
 		panic(fmt.Errorf("error in initializing ledgermgmt: %s", err))
 	}
-
 
 	for _, cid := range ledgerIds {
 		peerLogger.Infof("Loading chain %s", cid)

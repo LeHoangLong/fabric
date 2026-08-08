@@ -56,7 +56,6 @@ func (d *DeliverClient) seekSpecified(blockNumber uint64) error {
 
 func (d *DeliverClient) seekOldest() error {
 	env := seekHelper(d.ChannelID, seekOldest, d.TLSCertHash, d.Signer, d.BestEffort)
-
 	return d.Service.Send(env)
 }
 
@@ -111,7 +110,6 @@ func (d *DeliverClient) GetOldestBlock() (*cb.Block, error) {
 
 // GetNewestBlock gets the newest block from a peer/orderer's deliver service
 func (d *DeliverClient) GetNewestBlock() (*cb.Block, error) {
-
 	err := d.seekNewest()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error getting newest block")

@@ -63,7 +63,6 @@ func compile(policy *cb.SignaturePolicy, identities []*mb.MSPPrincipal) (func([]
 		if t.SignedBy < 0 || t.SignedBy >= int32(len(identities)) {
 			return nil, fmt.Errorf("identity index out of range, requested %v, but identities length is %d", t.SignedBy, len(identities))
 		}
-
 		signedByID := identities[t.SignedBy]
 		return func(signedData []msp.Identity, used []bool) bool {
 			cauthdslLogger.Debugf("%p signed by %d principal evaluation starts (used %v)", signedData, t.SignedBy, used)
@@ -85,7 +84,7 @@ func compile(policy *cb.SignaturePolicy, identities []*mb.MSPPrincipal) (func([]
 				used[i] = true
 				return true
 			}
-			cauthdslLogger.Debugf("%p principal evaluation fails\n", signedData)
+			cauthdslLogger.Debugf("%p principal evaluation fails", signedData)
 			return false
 		}, nil
 	default:

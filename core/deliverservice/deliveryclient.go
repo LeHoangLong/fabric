@@ -160,7 +160,6 @@ func (d *deliverServiceImpl) StartDeliverForChannel(chainID string, ledgerInfo b
 		dc.DeliverBlocks()
 		finalizer()
 	}()
-
 	return nil
 }
 
