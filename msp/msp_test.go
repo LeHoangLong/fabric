@@ -1610,7 +1610,7 @@ func TestProviderTypeToString(t *testing.T) {
 	require.Equal(t, "", pt)
 }
 
-func TestIsInAdditionalMspIdentifieListPreV13(t *testing.T) {
+func TestIsInAdditionalMspIdentifierListPreV13(t *testing.T) {
 	mspInstance := localMspV11
 	mspImpl := mspInstance.(*bccspmsp)
 	id := mspImpl.admins[0]
@@ -1638,7 +1638,7 @@ func TestIsInAdditionalMspIdentifieListPreV13(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestIsInAdditionalMspIdentifieListV142(t *testing.T) {
+func TestIsInAdditionalMspIdentifierListV142(t *testing.T) {
 	thisMSP := getLocalMSPWithVersion(t, "testdata/nodeous3", MSPv1_4_3)
 	mspImpl := thisMSP.(*bccspmsp)
 	id := mspImpl.admins[0]
@@ -1689,9 +1689,7 @@ func TestHasOURoleInternalWithWhitelist(t *testing.T) {
 
 	idImpl := id.(*identity)
 	err = thisMSP.hasOURoleInternal(idImpl, msp.MSPRole_PEER)
-	if err == nil {
-		t.Skip("test requires the identity to not have the peer OU")
-	}
+	require.Error(t, err, "hasOURoleInternal should fail when certifier does not match and env var is not set")
 
 	envKey := fmt.Sprintf("%s_ADDITIONAL_PRINCIPAL_CERTIFICATE_HASH_FOR_ROLE_%s", strings.ToUpper(thisMSP.name), strings.ToUpper("PEER"))
 	os.Setenv(envKey, certHashB64)
@@ -1757,9 +1755,7 @@ func TestValidateIdentityOUsV142WithWhitelist(t *testing.T) {
 	defer func() { thisMSP.adminOU.CertifiersIdentifier = originalCertifier }()
 
 	err = thisMSP.validateIdentityOUsV142(idImpl)
-	if err == nil {
-		t.Skip("test requires certifier mismatch path to be reached")
-	}
+	require.Error(t, err, "validateIdentityOUsV142 should fail when certifier does not match and env var is not set")
 
 	envKey := fmt.Sprintf("%s_ADDITIONAL_PRINCIPAL_CERTIFICATE_HASH_FOR_ROLE_%s", strings.ToUpper(thisMSP.name), strings.ToUpper("ADMIN"))
 	os.Setenv(envKey, certHashB64)
@@ -1767,4 +1763,109 @@ func TestValidateIdentityOUsV142WithWhitelist(t *testing.T) {
 
 	err = thisMSP.validateIdentityOUsV142(idImpl)
 	require.NoError(t, err)
+}
+
+func TestIsInAdditionalMspIdentifierListEnvNotSet(t *testing.T) {
+	thisMSP := getLocalMSPWithVersion(t, "testdata/nodeouadmin", MSPv1_4_3).(*bccspmsp)
+	cert, err := readFile("testdata/nodeouadmin/adm/testadmincert.pem")
+	require.NoError(t, err)
+	id, _, err := thisMSP.getIdentityFromConf(cert)
+	require.NoError(t, err)
+
+	certChain, err := thisMSP.getCertificationChain(id)
+	require.NoError(t, err)
+	require.NotEmpty(t, certChain)
+
+	certHash := sha256.Sum256(certChain[0].Raw)
+	certHashB64 := base64.StdEncoding.EncodeToString(certHash[:])
+
+	os.Unsetenv(fmt.Sprintf("%s_ADDITIONAL_PRINCIPAL_CERTIFICATE_HASH_FOR_ROLE_%s", strings.ToUpper(thisMSP.name), "PEER"))
+
+	err = thisMSP.isInAdditionalMspIdentifierList("PEER", certChain[0].Raw)
+	require.Error(t, err, "isInAdditionalMspIdentifierList should fail when env var is not set")
+	require.Contains(t, err.Error(), "not whitelisted")
+	require.Contains(t, err.Error(), certHashB64)
+
+	os.Unsetenv(fmt.Sprintf("%s_ADDITIONAL_PRINCIPAL_CERTIFICATE_HASH_FOR_ROLE_%s", strings.ToUpper(thisMSP.name), "ADMIN"))
+
+	err = thisMSP.isInAdditionalMspIdentifierList("ADMIN", certChain[0].Raw)
+	require.Error(t, err, "isInAdditionalMspIdentifierList should fail when env var is not set for ADMIN role")
+	require.Contains(t, err.Error(), "not whitelisted")
+
+	os.Unsetenv(fmt.Sprintf("%s_ADDITIONAL_PRINCIPAL_CERTIFICATE_HASH_FOR_ROLE_%s", strings.ToUpper(thisMSP.name), "CLIENT"))
+
+	err = thisMSP.isInAdditionalMspIdentifierList("CLIENT", certChain[0].Raw)
+	require.Error(t, err, "isInAdditionalMspIdentifierList should fail when env var is not set for CLIENT role")
+}
+
+func TestValidateIdentityOUsV11EnvNotSet(t *testing.T) {
+	thisMSP := getLocalMSPWithVersion(t, "testdata/nodeouadmin", MSPv1_1).(*bccspmsp)
+	id, err := thisMSP.GetDefaultSigningIdentity()
+	require.NoError(t, err)
+	idImpl := id.(*signingidentity)
+
+	require.NotEmpty(t, idImpl.GetOrganizationalUnits())
+
+	if len(thisMSP.peerOU.CertifiersIdentifier) == 0 {
+		t.Skip("test requires CertifiersIdentifier to be set")
+	}
+
+	certificationID, err := thisMSP.getCertificationChainIdentifier(&idImpl.identity)
+	require.NoError(t, err)
+	certHash := sha256.Sum256(certificationID)
+	certHashB64 := base64.StdEncoding.EncodeToString(certHash[:])
+
+	originalCertifier := thisMSP.peerOU.CertifiersIdentifier
+	thisMSP.peerOU.CertifiersIdentifier = []byte("mismatched-certifier")
+	defer func() { thisMSP.peerOU.CertifiersIdentifier = originalCertifier }()
+
+	envKey := fmt.Sprintf("%s_ADDITIONAL_PRINCIPAL_CERTIFICATE_HASH_FOR_ROLE_%s", strings.ToUpper(thisMSP.name), strings.ToUpper("PEER"))
+	os.Unsetenv(envKey)
+
+	err = thisMSP.validateIdentityOUsV11(&idImpl.identity)
+	require.Error(t, err, "validateIdentityOUsV11 should fail when certifier does not match and env var is not set")
+	require.Contains(t, err.Error(), "certifiersIdentifier does not match")
+
+	os.Setenv(envKey, certHashB64)
+	defer os.Unsetenv(envKey)
+
+	err = thisMSP.validateIdentityOUsV11(&idImpl.identity)
+	require.NoError(t, err, "validateIdentityOUsV11 should succeed when cert hash is whitelisted via env var")
+}
+
+func TestValidateIdentityOUsV142EnvNotSet(t *testing.T) {
+	thisMSP := getLocalMSPWithVersion(t, "testdata/nodeouadmin", MSPv1_4_3).(*bccspmsp)
+	cert, err := readFile("testdata/nodeouadmin/adm/testadmincert.pem")
+	require.NoError(t, err)
+	id, _, err := thisMSP.getIdentityFromConf(cert)
+	require.NoError(t, err)
+	idImpl := id.(*identity)
+
+	require.NotEmpty(t, idImpl.GetOrganizationalUnits())
+
+	if len(thisMSP.adminOU.CertifiersIdentifier) == 0 {
+		t.Skip("test requires CertifiersIdentifier to be set")
+	}
+
+	certificationID, err := thisMSP.getCertificationChainIdentifier(id)
+	require.NoError(t, err)
+	certHash := sha256.Sum256(certificationID)
+	certHashB64 := base64.StdEncoding.EncodeToString(certHash[:])
+
+	originalCertifier := thisMSP.adminOU.CertifiersIdentifier
+	thisMSP.adminOU.CertifiersIdentifier = []byte("mismatched-certifier")
+	defer func() { thisMSP.adminOU.CertifiersIdentifier = originalCertifier }()
+
+	envKey := fmt.Sprintf("%s_ADDITIONAL_PRINCIPAL_CERTIFICATE_HASH_FOR_ROLE_%s", strings.ToUpper(thisMSP.name), strings.ToUpper("ADMIN"))
+	os.Unsetenv(envKey)
+
+	err = thisMSP.validateIdentityOUsV142(idImpl)
+	require.Error(t, err, "validateIdentityOUsV142 should fail when certifier does not match and env var is not set")
+	require.Contains(t, err.Error(), "certifiersIdentifier does not match")
+
+	os.Setenv(envKey, certHashB64)
+	defer os.Unsetenv(envKey)
+
+	err = thisMSP.validateIdentityOUsV142(idImpl)
+	require.NoError(t, err, "validateIdentityOUsV142 should succeed when cert hash is whitelisted via env var")
 }

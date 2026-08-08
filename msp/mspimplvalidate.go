@@ -206,7 +206,7 @@ func (msp *bccspmsp) validateIdentityOUsV11(id *identity) error {
 		// If is not specified, it means that any certification path is fine.
 		// nodeOU.CertifiersIdentifier may be a whitelist of concatenated hash values.
 		if len(nodeOU.CertifiersIdentifier) != 0 && !bytes.Equal(nodeOU.CertifiersIdentifier, OU.CertifiersIdentifier) {
-			if err := msp.isInAdditionalMspIdentifieList(nodeOU.OrganizationalUnitIdentifier, OU.CertifiersIdentifier); err != nil {
+			if err := msp.isInAdditionalMspIdentifierList(nodeOU.OrganizationalUnitIdentifier, OU.CertifiersIdentifier); err != nil {
 				return errors.Errorf("certifiersIdentifier does not match: %s, MSP: [%s]: %s", OUIDs(id.GetOrganizationalUnits()), msp.name, err)
 			}
 		}
@@ -269,7 +269,7 @@ func (msp *bccspmsp) validateIdentityOUsV142(id *identity) error {
 		// If is not specified, it means that any certification path is fine.
 		// nodeOU.CertifiersIdentifier may be a whitelist of concatenated hash values.
 		if len(nodeOU.CertifiersIdentifier) != 0 && !bytes.Equal(nodeOU.CertifiersIdentifier, OU.CertifiersIdentifier) {
-			if err := msp.isInAdditionalMspIdentifieList(nodeOU.OrganizationalUnitIdentifier, OU.CertifiersIdentifier); err != nil {
+			if err := msp.isInAdditionalMspIdentifierList(nodeOU.OrganizationalUnitIdentifier, OU.CertifiersIdentifier); err != nil {
 				return errors.Errorf("certifiersIdentifier does not match: %s, MSP: [%s]: %s", OUIDs(id.GetOrganizationalUnits()), msp.name, err)
 			}
 		}

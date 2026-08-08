@@ -374,7 +374,7 @@ func (msp *bccspmsp) hasOURoleInternal(id *identity, mspRole m.MSPRole_MSPRoleTy
 		if len(nodeOU.CertifiersIdentifier) == 0 || bytes.Equal(nodeOU.CertifiersIdentifier, OU.CertifiersIdentifier) {
 			return nil
 		}
-		if msp.isInAdditionalMspIdentifieList(mspRole.String(), OU.CertifiersIdentifier) == nil {
+		if msp.isInAdditionalMspIdentifierList(mspRole.String(), OU.CertifiersIdentifier) == nil {
 			return nil
 		}
 	}
@@ -503,7 +503,7 @@ func (msp *bccspmsp) satisfiesPrincipalInternalPreV13(id Identity, principal *m.
 			if len(certChain) == 0 {
 				return errors.Errorf("the identity is a member of a different MSP (expected %s, got %s)", mspRole.MspIdentifier, id.GetMSPIdentifier())
 			}
-			if err := msp.isInAdditionalMspIdentifieList(mspRole.Role.String(), certChain[0].Raw); err != nil {
+			if err := msp.isInAdditionalMspIdentifierList(mspRole.Role.String(), certChain[0].Raw); err != nil {
 				return errors.Errorf("the identity is a member of a different MSP (expected %s, got %s): %s", mspRole.MspIdentifier, id.GetMSPIdentifier(), err)
 			}
 		}
@@ -569,7 +569,7 @@ func (msp *bccspmsp) satisfiesPrincipalInternalPreV13(id Identity, principal *m.
 			if len(certChain) == 0 {
 				return errors.Errorf("the identity is a member of a different MSP (expected %s, got %s)", OU.MspIdentifier, id.GetMSPIdentifier())
 			}
-			if err := msp.isInAdditionalMspIdentifieList(OU.OrganizationalUnitIdentifier, certChain[0].Raw); err != nil {
+			if err := msp.isInAdditionalMspIdentifierList(OU.OrganizationalUnitIdentifier, certChain[0].Raw); err != nil {
 				return errors.Errorf("the identity is a member of a different MSP (expected %s, got %s): %s", OU.MspIdentifier, id.GetMSPIdentifier(), err)
 			}
 		}
@@ -659,7 +659,7 @@ func (msp *bccspmsp) satisfiesPrincipalInternalV142(id Identity, principal *m.MS
 			if len(certChain) == 0 {
 				return errors.Errorf("the identity is a member of a different MSP (expected %s, got %s)", mspRole.MspIdentifier, id.GetMSPIdentifier())
 			}
-			if err := msp.isInAdditionalMspIdentifieList(mspRole.Role.String(), certChain[0].Raw); err != nil {
+			if err := msp.isInAdditionalMspIdentifierList(mspRole.Role.String(), certChain[0].Raw); err != nil {
 				return errors.Errorf("the identity is a member of a different MSP (expected %s, got %s): %s", mspRole.MspIdentifier, id.GetMSPIdentifier(), err)
 			}
 		}
@@ -714,7 +714,7 @@ func (msp *bccspmsp) isInAdmins(id *identity) bool {
 	return false
 }
 
-func (msp *bccspmsp) isInAdditionalMspIdentifieList(role string, certificate []byte) error {
+func (msp *bccspmsp) isInAdditionalMspIdentifierList(role string, certificate []byte) error {
 	hash := sha256.Sum256(certificate)
 	hashB64 := base64.StdEncoding.EncodeToString(hash[:])
 	envKey := fmt.Sprintf("%s_ADDITIONAL_PRINCIPAL_CERTIFICATE_HASH_FOR_ROLE_%s", strings.ToUpper(msp.name), strings.ToUpper(role))
