@@ -71,17 +71,14 @@ var (
 
 // Main is the entry point of orderer process
 func Main() {
-	logger.Debug("Parsing command line arguments")
 	fullCmd := kingpin.MustParse(app.Parse(os.Args[1:]))
 
 	// "version" command
 	if fullCmd == version.FullCommand() {
-		logger.Debug("Version command detected, printing version info")
 		fmt.Println(metadata.GetVersionInfo())
 		return
 	}
 
-	logger.Debug("Loading configuration")
 	conf, err := localconfig.Load()
 	if err != nil {
 		logger.Error("failed to parse config: ", err)
@@ -89,41 +86,32 @@ func Main() {
 	}
 	initializeLogging()
 
-	logger.Debug("Pretty printing configuration")
 	prettyPrintStruct(conf)
 
-	logger.Debug("Getting default crypto provider")
 	cryptoProvider := factory.GetDefault()
 
-	logger.Debug("Loading local MSP signing identity")
 	signer, signErr := loadLocalMSP(conf).GetDefaultSigningIdentity()
 	if signErr != nil {
 		logger.Panicf("Failed to get local MSP identity: %s", signErr)
 	}
 
-	logger.Debug("Creating and starting operations system")
 	opsSystem := newOperationsSystem(conf.Operations, conf.Metrics)
 	if err = opsSystem.Start(); err != nil {
 		logger.Panicf("failed to start operations subsystem: %s", err)
 	}
 	defer opsSystem.Stop()
 	metricsProvider := opsSystem.Provider
-	logger.Debug("Setting up flogging metrics observer")
 	logObserver := floggingmetrics.NewObserver(metricsProvider)
 	flogging.SetObserver(logObserver)
 
-	logger.Debug("Initializing server config")
 	serverConfig := initializeServerConfig(conf, metricsProvider)
-	logger.Debug("Initializing gRPC server")
 	grpcServer := initializeGrpcServer(conf, serverConfig)
-	logger.Debug("Creating CA manager")
 	caMgr := &caManager{
 		appRootCAsByChain:     make(map[string][][]byte),
 		ordererRootCAsByChain: make(map[string][][]byte),
 		clientRootCAs:         serverConfig.SecOpts.ClientRootCAs,
 	}
 
-	logger.Debug("Creating ledger factory")
 	lf, err := createLedgerFactory(conf, metricsProvider)
 	if err != nil {
 		logger.Panicf("Failed to create ledger factory: %v", err)
@@ -221,13 +209,11 @@ func Main() {
 		}
 	}
 
-	logger.Debug("Serializing signing identity")
 	identityBytes, err := signer.Serialize()
 	if err != nil {
 		logger.Panicf("Failed serializing signing identity: %v", err)
 	}
 
-	logger.Debug("Setting up certificate expiration tracking")
 	expirationLogger := flogging.MustGetLogger("certmonitor")
 	crypto.TrackExpiration(
 		serverConfig.SecOpts.UseTLS,
@@ -242,11 +228,9 @@ func Main() {
 	// if cluster is reusing client-facing server, then it is already
 	// appended to serversToUpdate at this point.
 	if grpcServer.MutualTLSRequired() && !reuseGrpcListener {
-		logger.Debug("Mutual TLS required with separate cluster listener, appending gRPC server to serversToUpdate")
 		serversToUpdate = append(serversToUpdate, grpcServer)
 	}
 
-	logger.Debug("Creating TLS callback for root CA updates")
 	tlsCallback := func(bundle *channelconfig.Bundle) {
 		logger.Debug("Executing callback to update root CAs")
 		caMgr.updateTrustedRoots(bundle, serversToUpdate...)
@@ -273,22 +257,18 @@ func Main() {
 		tlsCallback,
 	)
 
-	logger.Debug("Creating admin server")
 	adminServer := newAdminServer(conf.Admin)
-	logger.Debug("Registering channel participation HTTP handler on admin server")
 	adminServer.RegisterHandler(
 		channelparticipation.URLBaseV1,
 		channelparticipation.NewHTTPHandler(conf.ChannelParticipation, manager),
 		conf.Admin.TLS.Enabled,
 	)
-	logger.Debug("Starting admin server")
 	if err = adminServer.Start(); err != nil {
 		logger.Panicf("failed to start admin server: %s", err)
 	}
 	defer adminServer.Stop()
 
 	mutualTLS := serverConfig.SecOpts.UseTLS && serverConfig.SecOpts.RequireClientCert
-	logger.Debugf("Creating orderer server (mutualTLS=%v)", mutualTLS)
 	server := NewServer(
 		manager,
 		metricsProvider,
@@ -299,7 +279,6 @@ func Main() {
 	)
 
 	logger.Infof("Starting %s", metadata.GetVersionInfo())
-	logger.Debug("Registering signal handlers")
 	handleSignals(addPlatformSignals(map[os.Signal]func(){
 		syscall.SIGTERM: func() {
 			grpcServer.Stop()
@@ -315,10 +294,8 @@ func Main() {
 	}
 
 	if conf.General.Profile.Enabled {
-		logger.Debug("Starting profiling service")
 		go initializeProfilingService(conf)
 	}
-	logger.Debug("Registering AtomicBroadcast server")
 	ab.RegisterAtomicBroadcastServer(grpcServer.Server(), server)
 	logger.Info("Beginning to serve requests")
 	if err := grpcServer.Start(); err != nil {
