@@ -8,6 +8,8 @@ package peer
 
 import (
 	"fmt"
+	"os"
+	"strings"
 	"sync"
 
 	"github.com/hyperledger/fabric-protos-go/common"
@@ -306,6 +308,50 @@ func (p *Peer) createChannel(
 				}
 			}
 		}
+
+		envKeyAddr := fmt.Sprintf("CHANNEL_%s_ORDERER_ADDRESS", strings.ToUpper(cid))
+		envKeyChannelOrdererAddrMode := fmt.Sprintf("CHANNEL_%s_ORDERER_ADDRESS_MODE", strings.ToUpper(cid))
+
+		envAddr := os.Getenv(envKeyAddr)
+		if envAddr != "" {
+			envAddresses := strings.Split(envAddr, ",")
+			envAddrMode := os.Getenv(envKeyChannelOrdererAddrMode)
+
+			if envAddrMode == "append" {
+				for i, addr := range envAddresses {
+					addr = strings.TrimSpace(addr)
+					if addr == "" {
+						continue
+					}
+					addrCerts := readEnvCertsForIndex(cid, i)
+					globalAddresses = append(globalAddresses, addr)
+					orgAddresses[fmt.Sprintf("env_%d", i)] = orderers.OrdererOrg{
+						Addresses: []string{addr},
+						RootCerts: addrCerts,
+					}
+				}
+			} else {
+				newGlobalAddresses := make([]string, 0, len(envAddresses))
+				newOrgAddresses := map[string]orderers.OrdererOrg{}
+				for i, addr := range envAddresses {
+					addr = strings.TrimSpace(addr)
+					if addr == "" {
+						continue
+					}
+					addrCerts := readEnvCertsForIndex(cid, i)
+					newGlobalAddresses = append(newGlobalAddresses, addr)
+					newOrgAddresses[fmt.Sprintf("env_%d", i)] = orderers.OrdererOrg{
+						Addresses: []string{addr},
+						RootCerts: addrCerts,
+					}
+				}
+				if len(newGlobalAddresses) > 0 {
+					globalAddresses = newGlobalAddresses
+					orgAddresses = newOrgAddresses
+				}
+			}
+		}
+
 		ordererSource.Update(globalAddresses, orgAddresses)
 	}
 
@@ -385,6 +431,16 @@ func (p *Peer) createChannel(
 	p.channels[cid] = channel
 
 	return nil
+}
+
+func readEnvCertsForIndex(channelID string, index int) [][]byte {
+	envKey := fmt.Sprintf("CHANNEL_%s_ORDERER_CERTS_%d", strings.ToUpper(channelID), index)
+	certPEM := strings.TrimSpace(os.Getenv(envKey))
+	if certPEM == "" {
+		return nil
+	}
+	ret := [][]byte{[]byte(strings.ReplaceAll(certPEM, "\\n", "\n"))}
+	return ret
 }
 
 func (p *Peer) Channel(cid string) *Channel {

@@ -22,6 +22,8 @@ This checklist covers key configuration parameters for setting up a production n
 - [ledger.*](#ledger)
 - [operations.*](#operations)
 - [metrics.*](#metrics)
+- [Overriding channel orderer configuration with environment variables](#overriding-channel-orderer-configuration-with-environment-variables)
+- [Overriding MSP principal certificates with environment variables](#overriding-msp-principal-certificates-with-environment-variables)
 
 ## peer.id
 
@@ -405,6 +407,150 @@ By default this is disabled, but if you want to monitor the metrics for the peer
 
 - **`provider`:** (Required to use `statsd` or `Prometheus` metrics for the peer.) Because Prometheus utilizes a "pull" model there is not any configuration required, beyond making the operations service available. Rather, Prometheus will send requests to the operations URL to poll for available metrics.
 - **`address:`** (Required when using `statsd`.) When `statsd` is enabled, you will need to configure the hostname and port of the statsd server so that the peer can push metric updates.
+
+## Overriding channel orderer configuration with environment variables
+
+In some operational scenarios, you may need to override the orderer endpoint addresses or TLS root certificates for a specific channel without performing a channel configuration update. For example, you might need to redirect the peer to a different orderer node, or provide a new orderer TLS certificate when the orderer's certificate has changed and a channel config update has not yet been processed.
+
+A common scenario is when all orderer TLS certificates in a channel have expired. Because the peer cannot establish a TLS connection to the ordering service with expired certificates, it cannot receive blocks — including any channel configuration update that would distribute new certificates. This creates a deadlock where the peer cannot get the updated config because it cannot connect, and it cannot connect because it only has the expired certificates. The environment variable overrides break this deadlock by providing the new certificates without requiring the peer to first reach the ordering service.
+
+The peer supports a set of environment variables that allow you to override the orderer addresses and TLS certificates on a per-channel basis. These environment variables are evaluated when the peer joins or re-joins a channel (for example, at startup or after a channel configuration update).
+
+### Environment variables
+
+The following environment variables control the override behavior. Replace `<CHANNELID>` with the uppercase name of the channel (for example, `MYCHANNEL`).
+
+| Variable | Description |
+| --- | --- |
+| `CHANNEL_<CHANNELID>_ORDERER_ADDRESS` | Comma-separated list of orderer endpoint addresses (e.g., `orderer1.example.com:7050,orderer2.example.com:7050`) |
+| `CHANNEL_<CHANNELID>_ORDERER_ADDRESS_MODE` | When set to `append`, the addresses from the environment variable are appended to the existing orderer addresses from the channel configuration. When omitted or set to any other value, the environment variable addresses **replace** the channel configuration addresses entirely. |
+| `CHANNEL_<CHANNELID>_ORDERER_CERTS_<N>` | PEM-encoded TLS root certificate for the Nth orderer address (0-indexed). The `<N>` corresponds to the position of the address in `CHANNEL_<CHANNELID>_ORDERER_ADDRESS`. Use `\n` to represent newlines within the PEM string. |
+
+If `CHANNEL_<CHANNELID>_ORDERER_ADDRESS` is not set or is empty, no override occurs and the channel configuration orderer addresses are used as-is.
+
+### Examples
+
+**Example 1: Replace all orderer addresses for a channel**
+
+```bash
+export CHANNEL_MYCHANNEL_ORDERER_ADDRESS="new-orderer.example.com:7050"
+export CHANNEL_MYCHANNEL_ORDERER_CERTS_0="-----BEGIN CERTIFICATE-----\nMIICWTCCAf6gAwIBA...\n-----END CERTIFICATE-----"
+```
+
+This replaces the orderer endpoints for channel `mychannel` with a single orderer at `new-orderer.example.com:7050` and associates the provided TLS certificate at index 0.
+
+**Example 2: Append additional orderer addresses**
+
+```bash
+export CHANNEL_MYCHANNEL_ORDERER_ADDRESS="extra-orderer1.example.com:7050,extra-orderer2.example.com:7050"
+export CHANNEL_MYCHANNEL_ORDERER_ADDRESS_MODE="append"
+export CHANNEL_MYCHANNEL_ORDERER_CERTS_0="-----BEGIN CERTIFICATE-----\nMIICWTCCA...\n-----END CERTIFICATE-----"
+export CHANNEL_MYCHANNEL_ORDERER_CERTS_1="-----BEGIN CERTIFICATE-----\nMIICWjCCB...\n-----END CERTIFICATE-----"
+```
+
+This appends two additional orderers to the existing list of orderer endpoints defined in the channel configuration. Each orderer gets its own TLS certificate via the index-based cert variables.
+
+**Example 3: Replace multiple orderer addresses**
+
+```bash
+export CHANNEL_MYCHANNEL_ORDERER_ADDRESS="orderer1.org1.com:7050,orderer2.org1.com:7050"
+export CHANNEL_MYCHANNEL_ORDERER_CERTS_0="-----BEGIN CERTIFICATE-----\nMIICWTCCA...\n-----END CERTIFICATE-----"
+export CHANNEL_MYCHANNEL_ORDERER_CERTS_1="-----BEGIN CERTIFICATE-----\nMIICWjCCB...\n-----END CERTIFICATE-----"
+```
+
+This replaces the orderer endpoints for channel `mychannel` with two new orderer addresses, each with its own TLS certificate.
+
+**Example 4: Recover from expired orderer TLS certificates**
+
+When all orderer nodes in a channel have their TLS certificates expired, the peer can no longer connect to pull blocks or receive a channel configuration update with new certificates. The environment variables provide the new certificates so the peer can reconnect without a channel config update:
+
+```bash
+export CHANNEL_MYCHANNEL_ORDERER_ADDRESS="orderer0.example.com:7050,orderer1.example.com:7050,orderer2.example.com:7050"
+export CHANNEL_MYCHANNEL_ORDERER_CERTS_0="-----BEGIN CERTIFICATE-----\n...new orderer0 cert...\n-----END CERTIFICATE-----"
+export CHANNEL_MYCHANNEL_ORDERER_CERTS_1="-----BEGIN CERTIFICATE-----\n...new orderer1 cert...\n-----END CERTIFICATE-----"
+export CHANNEL_MYCHANNEL_ORDERER_CERTS_2="-----BEGIN CERTIFICATE-----\n...new orderer2 cert...\n-----END CERTIFICATE-----"
+```
+
+After setting these variables, restart the peer. The peer will use the new certificates to establish TLS connections to the orderers, allowing it to resume block delivery. Once the channel configuration is updated with the new certificates via a normal config update transaction, the environment variables can be removed.
+
+### Important notes
+
+- The environment variables are read at channel creation time (startup or channel join). If you change these variables while the peer is running, the change will take effect the next time the channel is re-initialized (e.g., after a peer restart or a channel configuration update).
+- The peer will randomly select an orderer endpoint from the final list when connecting to the ordering service. If a connection to one orderer fails, the peer will fail over to another endpoint.
+- The certificate index (`<N>`) corresponds to the index of the address in the `CHANNEL_<CHANNELID>_ORDERER_ADDRESS` comma-separated list, starting from 0. Certificates are optional; an address with no corresponding cert variable will have no TLS root certificates configured.
+
+## Overriding MSP principal certificates with environment variables
+
+When the peer validates identities, it checks that the principal's certificate matches the OU (organizational unit) identifiers defined in the channel MSP configuration. In some operational scenarios, you may need to allow additional certificates for a given role that are not yet defined in the channel config — for example, when an organization has rotated its signing certificates but the channel config update is blocked, or when an identity from a different MSP needs to be temporarily authorized.
+
+The peer supports an environment variable per MSP that defines a comma-separated whitelist of additional certificate hashes for a specific role. The variable is evaluated during identity validation in the following contexts:
+
+- OU enforcement for node identity types (client, peer, admin, orderer)
+- MSP principal evaluation when the identity belongs to a different MSP than expected
+
+### Environment variable
+
+Replace `<MSPNAME>` with the uppercase MSP ID (e.g., `ORG1MSP`) and `<ROLE>` with the uppercase role name (`CLIENT`, `PEER`, `ADMIN`, or `ORDERER`).
+
+| Variable | Description |
+| --- | --- |
+| `<MSPNAME>_ADDITIONAL_PRINCIPAL_CERTIFICATE_HASH_FOR_ROLE_<ROLE>` | Comma-separated list of base64-encoded SHA-256 hashes of certificate raw bytes. When a certificate's hash matches an entry in this list, it is considered whitelisted for the given role in the given MSP. |
+
+If the environment variable is not set or is empty, the normal channel config MSP validation applies and any unmatched certificate will be rejected.
+
+### Generating the certificate hash
+
+The certificate hash is the base64-encoded SHA-256 hash of the certificate's raw DER bytes. You can compute it using OpenSSL:
+
+```bash
+openssl x509 -in cert.pem -outform DER | openssl dgst -sha256 -binary | base64 -w0
+```
+
+Alternatively, with `sha256sum` and helper tools:
+
+```bash
+openssl x509 -in cert.pem -outform DER | sha256sum | awk '{print $1}' | xxd -r -p | base64 -w0
+```
+
+### Examples
+
+**Example 1: Allow an additional peer certificate**
+
+```bash
+export ORG1MSP_ADDITIONAL_PRINCIPAL_CERTIFICATE_HASH_FOR_ROLE_PEER="a7ca45a7cc85f1d89c905b775920361ed089a364e12a9b6d55ba75c965ddd6a9"
+```
+
+This whitelists a single additional certificate hash for the `peer` role in MSP `Org1MSP`.
+
+**Example 2: Allow multiple certificates for admin role**
+
+```bash
+export ORG1MSP_ADDITIONAL_PRINCIPAL_CERTIFICATE_HASH_FOR_ROLE_ADMIN="abc123hash...,def456hash..."
+```
+
+This whitelists two additional certificates for the `admin` role.
+
+**Example 3: Recover from rotated MSP signing certificates**
+
+If an organization has rotated its signing certificates and identities can no longer be validated because the channel config still references the old certificates, use the env var to whitelist the new certificate hashes while waiting for the channel config update to propagate:
+
+```bash
+# Compute hash from new cert file
+HASH=$(openssl x509 -in new-signer-cert.pem -outform DER | openssl dgst -sha256 -binary | base64 -w0)
+
+export ORG1MSP_ADDITIONAL_PRINCIPAL_CERTIFICATE_HASH_FOR_ROLE_CLIENT="$HASH"
+export ORG1MSP_ADDITIONAL_PRINCIPAL_CERTIFICATE_HASH_FOR_ROLE_PEER="$HASH"
+export ORG1MSP_ADDITIONAL_PRINCIPAL_CERTIFICATE_HASH_FOR_ROLE_ADMIN="$HASH"
+```
+
+After setting these variables and restarting the peer, identities certified by the new signing certificate will be accepted. Once the channel configuration is updated with the new MSP certificates, the environment variables can be removed.
+
+### Important notes
+
+- The environment variables are read at identity validation time. They take effect immediately without requiring a peer restart.
+- The certificate hash must be computed from the **raw DER bytes** of the certificate (the PEM wrapper is stripped before hashing).
+- Multiple hashes can be provided in a single variable by separating them with commas. Leading and trailing whitespace around each hash is trimmed.
+- This override does not modify the channel configuration. It is a temporary measure intended for operational recovery scenarios; the channel config should be updated as the permanent solution.
 
 ## Next steps
 

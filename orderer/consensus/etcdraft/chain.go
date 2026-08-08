@@ -944,22 +944,31 @@ func (c *Chain) ordered(msg *orderer.SubmitRequest) (batches [][]*common.Envelop
 				defer atomic.StoreUint32(&c.leadershipTransferInProgress, 0)
 
 				for attempt := 1; attempt <= AbdicationMaxAttempts; attempt++ {
-					if err := c.Node.abdicateLeadership(); err != nil {
-						// If there is no leader, abort and do not retry.
-						// Return early to prevent re-submission of the transaction
-						if err == ErrNoLeader || err == ErrChainHalting {
-							return
-						}
-
-						// If the error isn't any of the below, it's a programming error, so panic.
-						if err != ErrNoAvailableLeaderCandidate && err != ErrTimedOutLeaderTransfer {
-							c.logger.Panicf("Programming error, abdicateLeader() returned with an unexpected error: %v", err)
-						}
-
-						// Else, it's one of the errors above, so we retry.
-						continue
+					submit := false
+					if len(c.Node.Status().Progress) == 1 {
+						submit = true
 					} else {
-						// Else, abdication succeeded, so we submit the transaction (which forwards to the leader)
+						if err := c.Node.abdicateLeadership(); err != nil {
+							// If there is no leader, abort and do not retry.
+							// Return early to prevent re-submission of the transaction
+							if err == ErrNoLeader || err == ErrChainHalting {
+								return
+							}
+
+							// If the error isn't any of the below, it's a programming error, so panic.
+							if err != ErrNoAvailableLeaderCandidate && err != ErrTimedOutLeaderTransfer {
+								c.logger.Panicf("Programming error, abdicateLeader() returned with an unexpected error: %v", err)
+							}
+
+							// Else, it's one of the errors above, so we retry.
+							continue
+						} else {
+							submit = true
+							// Else, abdication succeeded, so we submit the transaction (which forwards to the leader)
+						}
+					}
+
+					if submit {
 						if err := c.Submit(msg, 0); err != nil {
 							c.logger.Warnf("Reconfiguration transaction forwarding failed with error: %v", err)
 						}
@@ -1559,8 +1568,10 @@ func (c *Chain) checkForEvictionNCertRotation(env *common.Envelope) bool {
 	}
 
 	if membershipUpdates.RotatedNode == c.raftID {
-		c.logger.Infof("Detected certificate rotation of our node")
-		return true
+		if _, found := membershipUpdates.NewConsenters[c.raftID]; !found {
+			c.logger.Infof("Detected certificate rotation of our node")
+			return true
+		}
 	}
 
 	if _, exists := membershipUpdates.NewConsenters[c.raftID]; !exists {

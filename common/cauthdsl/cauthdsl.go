@@ -44,7 +44,8 @@ func compile(policy *cb.SignaturePolicy, identities []*mb.MSPPrincipal) (func([]
 			_used := make([]bool, len(used))
 			for _, policy := range policies {
 				copy(_used, used)
-				if policy(signedData, _used) {
+				passed := policy(signedData, _used)
+				if passed {
 					verified++
 					copy(used, _used)
 				}

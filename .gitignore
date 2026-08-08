@@ -25,3 +25,7 @@ TESTS*.xml
 .tox/
 .vagrant/
 .vscode
+cmd/peer/peer
+.kilo
+cmd/configtxlator/configtxlator
+cmd/orderer/orderer
