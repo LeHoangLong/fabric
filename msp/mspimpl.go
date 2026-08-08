@@ -770,7 +770,6 @@ func (msp *bccspmsp) getUniqueValidationChain(cert *x509.Certificate, opts x509.
 	if msp.opts == nil {
 		return nil, errors.New("the supplied identity has no verify options")
 	}
-
 	validationChains, err := cert.Verify(opts)
 	if err != nil {
 		return nil, errors.WithMessage(err, "the supplied identity is not valid")

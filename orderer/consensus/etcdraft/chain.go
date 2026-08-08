@@ -934,6 +934,7 @@ func (c *Chain) ordered(msg *orderer.SubmitRequest) (batches [][]*common.Envelop
 		}
 
 		if c.checkForEvictionNCertRotation(msg.Payload) {
+
 			if !atomic.CompareAndSwapUint32(&c.leadershipTransferInProgress, 0, 1) {
 				c.logger.Warnf("A reconfiguration transaction is already in progress, ignoring a subsequent transaction")
 				return

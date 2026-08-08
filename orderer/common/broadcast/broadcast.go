@@ -156,7 +156,6 @@ func (bh *Handler) ProcessMessage(msg *cb.Envelope, addr string) (resp *ab.Broad
 		return &ab.BroadcastResponse{Status: cb.Status_BAD_REQUEST, Info: err.Error()}
 	}
 
-
 	if !isConfig {
 		logger.Debugf("[channel: %s] Broadcast is processing normal message from %s with txid '%s' of type %s", chdr.ChannelId, addr, chdr.TxId, cb.HeaderType_name[chdr.Type])
 

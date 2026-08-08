@@ -210,7 +210,6 @@ func (msp *bccspmsp) validateIdentityOUsV11(id *identity) error {
 				return errors.Errorf("certifiersIdentifier does not match: %s, MSP: [%s]: %s", OUIDs(id.GetOrganizationalUnits()), msp.name, err)
 			}
 		}
-
 		counter++
 		if counter > 1 {
 			break
